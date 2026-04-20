@@ -8,7 +8,7 @@ Data Fast Insights depends on:
 
 # Installing from Github repository
 ```
-pip install git+https://github.com/xsolla/data_fast_insights.git
+pip install git+https://github.com/ksetrae/data_fast_insights.git
 ```
 If you have troubles installing this package, try upgrading its dependencies in your environment.  
 
