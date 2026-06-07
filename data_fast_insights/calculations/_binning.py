@@ -1,10 +1,101 @@
 from typing import TYPE_CHECKING
 import warnings
+from contextlib import contextmanager
 
-import scorecardpy as sc
+import optbinning.binning.metrics
+import numpy as np
+import pandas as pd
+from optbinning import OptimalBinning
+
+
 
 if TYPE_CHECKING:
     from data_fast_insights import BinaryDependenceModelData
+
+
+# This is required due to compatibility issues between optbinning and newer versions of scikit-learn
+@contextmanager
+def safe_optbinning_patch():
+    """
+    Directly intercepts check_array inside optbinning's internal metrics module
+    to map the removed 'force_all_finite' keyword to 'ensure_all_finite'.
+    """
+    original_check_array = optbinning.binning.metrics.check_array
+
+    def patched_check_array(*args, **kwargs):
+        if 'force_all_finite' in kwargs:
+            kwargs['ensure_all_finite'] = kwargs.pop('force_all_finite')
+        return original_check_array(*args, **kwargs)
+
+    optbinning.binning.metrics.check_array = patched_check_array
+    try:
+        yield
+    finally:
+        optbinning.binning.metrics.check_array = original_check_array
+
+
+def get_optbinning_bins(df: pd.DataFrame, num_cols: list, y_col: str, min_bin_size: float = 0.05) -> dict:
+    """
+    Generates a dictionary matching scorecardpy sc.woebin structure
+    including both 'bin' intervals and 'breaks' tracking metrics.
+    """
+    bins_dict = {}
+    y_vector = df[y_col].values
+
+    with safe_optbinning_patch():
+        for col in num_cols:
+            X_vector = df[col].values
+
+            optb = OptimalBinning(
+                name=col,
+                dtype="numerical",
+                solver="cp",
+                min_bin_size=min_bin_size
+            )
+            optb.fit(X_vector, y_vector)
+
+            splits = optb.splits
+
+            if len(splits) == 0:
+                valid_x = X_vector[~np.isnan(X_vector)]
+                if len(valid_x) > 0:
+                    splits = np.nanpercentile(valid_x, [25, 50, 75])
+                    splits = np.unique(splits)
+                else:
+                    splits = np.array([])
+
+            intervals = [-np.inf] + list(splits) + [np.inf]
+
+            bin_labels = []
+            break_labels = []
+
+            for i in range(len(intervals) - 1):
+                # 1. Create standard interval strings e.g. [-inf, 11.0)
+                bin_labels.append(f"[{intervals[i]},{intervals[i + 1]})")
+
+                # 2. Extract upper boundaries for your breaks tracking array
+                upper_bound = intervals[i + 1]
+                if upper_bound == np.inf:
+                    break_labels.append('inf')
+                elif upper_bound == -np.inf:
+                    break_labels.append('-inf')
+                else:
+                    # Formats floats cleanly to strip extra floating-point precision decimals
+                    break_labels.append(str(float(upper_bound)))
+
+            # If missing rows exist, align 'missing' data to match structure
+            if pd.Series(X_vector).isnull().any():
+                bin_labels.append('missing')
+                # Missing categories traditionally do not have evaluation splits/numerical bounds
+                break_labels.append(np.nan)
+
+            # Wrap variables into the Dataframe schema required by downstream functions
+            bins_dict[col] = pd.DataFrame({
+                'bin': bin_labels,
+                'breaks': break_labels
+            })
+
+    return bins_dict
 
 
 def make_bins(model_data: 'BinaryDependenceModelData', manual_breaks: dict = None) -> dict:
@@ -14,11 +105,6 @@ def make_bins(model_data: 'BinaryDependenceModelData', manual_breaks: dict = Non
     Parameters
     ----------
     model_data
-    manual_breaks
-        Info about features that need to be separated into predefined intervals.
-        If this argument is set,
-            function won't calculate intervals for it and will use passed values as breaks instead.
-        Format: {feature_name: [break1, break2]}
 
     Returns
     -------
@@ -31,26 +117,19 @@ def make_bins(model_data: 'BinaryDependenceModelData', manual_breaks: dict = Non
     if model_data.is_data_converted:
         warnings.warn(
             "Features in model_data seem to be already converted to binary format, binning might be futile")
-    dt = model_data.base_data[model_data.num_cols].join(model_data.data[model_data.y_binary_name])
-    kwargs = {'dt': dt, 'y': model_data.y_binary_name}
-    # TODO: manual breaks don't work exactly as expected. It there are no values in the interval,
-    #  break would not be created
-    if manual_breaks is not None and isinstance(manual_breaks, dict):
-        kwargs['breaks_list'] = manual_breaks
-    bins = sc.woebin(**kwargs)
 
-    # Adjusting bins manually (rounding for representation)
-    # TODO: add rounding but without rerunning binning;
-    #  for now users can rerun binning with manual_breaks arg
-    # breaks_adj = dict()
-    # for c in bins.keys():
-    #     for b in bins[c]['breaks'].tolist():
-    #         if isinstance(b, str):
-    #             continue
-    #         breaks_adj[c] = round(float(b))
-    # bins = sc.woebin(model_data.data[list(model_data.num_cols) + [model_data.y_binary_name]],
-    #                  y=model_data.y_binary_name,
-    #                  breaks_list=breaks_adj)
+    if manual_breaks is not None:
+        warnings.warn("Manual breaks are not supported currently, including it has no effect")
+
+    num_cols = list(model_data.num_cols)
+
+    dt = model_data.base_data[num_cols].join(model_data.data[model_data.y_binary_name])
+    bins = get_optbinning_bins(
+        df=dt,
+        num_cols=num_cols,
+        y_col=model_data.y_binary_name
+    )
+
     return bins
 
 

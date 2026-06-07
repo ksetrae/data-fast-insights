@@ -13,7 +13,7 @@ def exclude_zero_var(df, num_cols, cat_cols):
         elif c in cat_cols and df[c].nunique() < 2:
             exclude_cats.append(c)
 
-    new_df = df.drop(exclude_nums, 1).drop(exclude_cats, 1)
+    new_df = df.drop(exclude_nums, axis=1).drop(exclude_cats, axis=1)
     num_feats_new = num_cols.difference(set(exclude_nums))
     cat_feats_new = cat_cols.difference(set(exclude_cats))
     return {'df': new_df, 'num_cols': num_feats_new, 'cat_cols': cat_feats_new}

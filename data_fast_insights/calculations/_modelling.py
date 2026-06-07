@@ -55,11 +55,11 @@ def calculate_dependence(model_data: 'BinaryDependenceModelData' = None) -> pd.D
     #     warnings.warn("""Features in model_data seem to not be converted to binary format yet,
     #     calculate_dependence() might return wrong output.
     #     """)
-    df_features = model_data.data.drop(model_data.y_name, 1)
+    df_features = model_data.data.drop(model_data.y_name, axis=1)
     res_total = pd.DataFrame(
         df_features.sum(axis=0), columns=['total_sum']).sort_values(by='total_sum', ascending=False)
 
-    df_low = df_features[df_features[model_data.y_binary_name] == 1].drop(model_data.y_binary_name, 1).copy()
+    df_low = df_features[df_features[model_data.y_binary_name] == 1].drop(model_data.y_binary_name, axis=1).copy()
     res_low = pd.DataFrame(df_low.sum(axis=0), columns=['low_sum'])
     res_low = pd.merge(res_total, res_low, left_index=True, right_index=True)
     res_low['low_perc'] = (res_low['low_sum'] / res_low['total_sum']) * 100
@@ -70,6 +70,7 @@ def calculate_dependence(model_data: 'BinaryDependenceModelData' = None) -> pd.D
 
     res_low['base_col'] = ''
     res_low['base_breaks'] = ''
+    res_low['base_breaks'] = res_low['base_breaks'].astype(object)
     res_low['base_range'] = ''
     # res_low['base_central_value'] = np.nan
     # res_low['base_central_value'] = res_low['base_central_value'].astype(object)

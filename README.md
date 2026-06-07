@@ -2,6 +2,15 @@
 [![Python Version](https://img.shields.io/badge/Python-3.7%2B-blue)](https://img.shields.io/badge/Python-3.7%2B-blue)
 [![Version](https://img.shields.io/badge/version-0.2.1.1-blue)](https://img.shields.io/badge/version-0.2.1.1-blue)
 
+# REWORK IN PROGRESS
+package is currently being reworked to 
+- use modern versions of dependencies (scipy stack and Python)
+- use `optbinning` instead of `scorecardpy` for binning (because it's maintained)
+- support additional features (such as plotting synthesized combined segments)
+Bugs, mistakes and mismatches with scripts using previous versions can occur.
+
+
+
 # Info
 **Data Fast Insights** is a library for quickly finding insights on given data or testing hypotheses.  
 Thus it can be used:

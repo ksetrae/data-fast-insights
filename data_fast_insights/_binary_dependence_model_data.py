@@ -139,7 +139,7 @@ class BinaryDependenceModelData:
                     exclude_cats.append(cat)
             for cat in exclude_cats:
                 self.cat_cols.remove(cat)
-                self.base_data = self.base_data.drop(cat, 1)
+                self.base_data = self.base_data.drop(cat, axis=1)
                 logging.warning(f"{cat} feature was removed before the analysis, because it has < 2 unique values")
 
             for num in self.num_cols:
@@ -147,7 +147,7 @@ class BinaryDependenceModelData:
                     exclude_nums.append(num)
             for num in exclude_nums:
                 self.num_cols.remove(num)
-                self.base_data = self.base_data.drop(num, 1)
+                self.base_data = self.base_data.drop(num, axis=1)
                 logging.warning(f"{num} feature was removed before the analysis, because it has zero variance")
 
     def _convert_types(self) -> None:

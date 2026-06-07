@@ -10,10 +10,10 @@ setuptools.setup(
     version="0.2.1.1",
     author="p.gafiatullin; a.tolmachev",
     author_email="p.gafiatullin@xsolla.com",
-    description="Library for using Data Fast Insights model on custom data.",
+    description="Analytical module for getting quick insights from data based on central tendency statistics",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/xsolla",
+    url="https://github.com/ksetrae/data-fast-insights",
     install_requires=requirements,
     packages=setuptools.find_packages(),
     classifiers=[
