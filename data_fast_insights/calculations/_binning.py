@@ -26,7 +26,6 @@ def safe_optbinning_patch():
 
     sklearn.utils.validation.check_array = patched_check_array
 
-    # Also explicitly overwrite modules that might have directly imported it
     import optbinning.binning.metrics
     import optbinning.binning.binning
 
@@ -46,6 +45,20 @@ def safe_optbinning_patch():
             optbinning.binning.binning.check_array = original_binning_check
 
 
+def _format_clean_float(val: float) -> str:
+    """Helper to round to 2 decimals and strip trailing zeros (e.g., 5.0 -> '5')"""
+    if val == np.inf:
+        return 'inf'
+    if val == -np.inf:
+        return '-inf'
+
+    rounded = round(float(val), 2)
+    # If the float corresponds perfectly to an integer, drop the trailing .0
+    if rounded.is_integer():
+        return str(int(rounded))
+    return str(rounded)
+
+
 def get_optbinning_bins(
         df: pd.DataFrame,
         num_cols: list,
@@ -62,10 +75,11 @@ def get_optbinning_bins(
     with safe_optbinning_patch():
         for col in num_cols:
             X_vector = df[col].values
+
             if col in manual_breaks and manual_breaks[col] is not None:
                 raw_splits = [x for x in manual_breaks[col] if x not in ['inf', '-inf', np.inf, -np.inf]]
-                custom_splits = sorted(list(set(float(x) for x in raw_splits)))
-
+                # Force human-readable rounding on incoming manual user breaks
+                custom_splits = sorted(list(set(round(float(x), 2) for x in raw_splits)))
                 fixed_mask = [True] * len(custom_splits)
 
                 optb = OptimalBinning(
@@ -73,7 +87,6 @@ def get_optbinning_bins(
                     dtype="numerical",
                     user_splits=custom_splits,
                     user_splits_fixed=fixed_mask,
-                    # Prevents the library from deleting manual breaks. Upd: also we specifically don't need to enforce this
                     monotonic_trend=None
                 )
             else:
@@ -85,31 +98,29 @@ def get_optbinning_bins(
                 )
 
             optb.fit(X_vector, y_vector)
-            splits = optb.splits
 
-            if len(splits) == 0:
+            raw_splits = optb.splits
+            if len(raw_splits) == 0:
                 valid_x = X_vector[~np.isnan(X_vector)]
                 if len(valid_x) > 0:
-                    splits = np.nanpercentile(valid_x, [25, 50, 75])
-                    splits = np.unique(splits)
+                    raw_splits = np.nanpercentile(valid_x, )
                 else:
-                    splits = np.array([])
+                    raw_splits = np.array([])
 
-            intervals = [-np.inf] + list(splits) + [np.inf]
+            clean_splits = sorted(list(set(round(float(x), 2) for x in raw_splits)))
+
+            intervals = [-np.inf] + clean_splits + [np.inf]
 
             bin_labels = []
             break_labels = []
 
             for i in range(len(intervals) - 1):
-                bin_labels.append(f"[{intervals[i]},{intervals[i + 1]})")
+                lower_str = _format_clean_float(intervals[i])
+                upper_str = _format_clean_float(intervals[i + 1])
 
-                upper_bound = intervals[i + 1]
-                if upper_bound == np.inf:
-                    break_labels.append('inf')
-                elif upper_bound == -np.inf:
-                    break_labels.append('-inf')
-                else:
-                    break_labels.append(str(float(upper_bound)))
+                bin_labels.append(f"[{lower_str},{upper_str})")
+
+                break_labels.append(upper_str)
 
             if pd.Series(X_vector).isnull().any():
                 bin_labels.append('missing')
