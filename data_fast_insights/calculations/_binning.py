@@ -14,6 +14,9 @@ if TYPE_CHECKING:
     from data_fast_insights import BinaryDependenceModelData
 
 
+BIN_DIGITS = 1
+
+
 # This is required due to compatibility issues between optbinning and newer versions of scikit-learn
 @contextmanager
 def safe_optbinning_patch():
@@ -63,7 +66,9 @@ def get_optbinning_bins(
         df: pd.DataFrame,
         num_cols: list,
         y_col: str,
+        max_pvalue: float | None = 0.05,
         min_bin_size: float = 0.05,
+        max_n_bins: int | None = None,
         manual_breaks: dict = None
 ) -> dict:
     bins_dict = {}
@@ -76,26 +81,30 @@ def get_optbinning_bins(
         for col in num_cols:
             X_vector = df[col].values
 
+            kwargs = {
+                "name": col,
+                "dtype": "numerical",
+                "solver": "cp",
+                "min_bin_size": min_bin_size,
+                "monotonic_trend": None,
+                "min_event_rate_diff": 0.0,
+                "gamma": 0.0,
+                "max_n_bins": max_n_bins,
+                "max_pvalue": max_pvalue,
+                "max_pvalue_policy": "all"
+            }
+
             if col in manual_breaks and manual_breaks[col] is not None:
                 raw_splits = [x for x in manual_breaks[col] if x not in ['inf', '-inf', np.inf, -np.inf]]
-                # Force human-readable rounding on incoming manual user breaks
-                custom_splits = sorted(list(set(round(float(x), 2) for x in raw_splits)))
+                custom_splits = sorted(list(set(round(float(x), BIN_DIGITS) for x in raw_splits)))
                 fixed_mask = [True] * len(custom_splits)
 
-                optb = OptimalBinning(
-                    name=col,
-                    dtype="numerical",
-                    user_splits=custom_splits,
-                    user_splits_fixed=fixed_mask,
-                    monotonic_trend=None
-                )
-            else:
-                optb = OptimalBinning(
-                    name=col,
-                    dtype="numerical",
-                    solver="cp",
-                    min_bin_size=min_bin_size
-                )
+                kwargs["user_splits"] = custom_splits
+                kwargs["user_splits_fixed"] = fixed_mask
+                kwargs["monotonic_trend"] = None
+
+
+            optb = OptimalBinning(**kwargs)
 
             optb.fit(X_vector, y_vector)
 
@@ -107,7 +116,7 @@ def get_optbinning_bins(
                 else:
                     raw_splits = np.array([])
 
-            clean_splits = sorted(list(set(round(float(x), 2) for x in raw_splits)))
+            clean_splits = sorted(list(set(round(float(x), BIN_DIGITS) for x in raw_splits)))
 
             intervals = [-np.inf] + clean_splits + [np.inf]
 
