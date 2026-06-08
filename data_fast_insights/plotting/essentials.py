@@ -17,6 +17,9 @@ There might be problems with plotting in different frontends
 # TODO: custom sorts (see resort argument in functions)
 
 
+# plt.style.use('dark_background')
+
+
 def plot_segments_dependence(model_data: 'BinaryDependenceModelData',
                              res_low_df: pd.DataFrame,
                              base_feature_name: str,
