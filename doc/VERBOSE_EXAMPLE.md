@@ -1,6 +1,11 @@
 Suppose there are several car models. We know some of the technical parameters and number of sales for each of these.  
 And we want to know which car parameters drop the number of sales (and what should be changed in the production of cars).  
-    
+
+
+### Deprecated
+This example is partially outdated.
+Resulting dataframe contains new columns, and some columns are renamed
+
 ### Imports and settings
 ``` python
 import pandas as pd

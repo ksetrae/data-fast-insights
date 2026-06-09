@@ -1,3 +1,12 @@
+
+### 0.4
+* Switch to interactive plotly plotting
+* Misc refactoring and improvements
+
+### 0.3
+* Upgrade to work with newer versions of dependencies, except for scorecardpy, which was switched for optbinning
+* Various fixes and improvements
+
 ### 0.2.1 - 21 Apr 2021
 * Add group importance metric: see Calculated Metrics in [calculations description](data_fast_insights/doc/CALCULATIONS_DESCRIPTION.md)
 

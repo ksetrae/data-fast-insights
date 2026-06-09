@@ -112,7 +112,7 @@ def get_optbinning_bins(
             if len(raw_splits) == 0:
                 valid_x = X_vector[~np.isnan(X_vector)]
                 if len(valid_x) > 0:
-                    raw_splits = np.nanpercentile(valid_x, )
+                    raw_splits = np.nanpercentile(valid_x, [25, 50, 75])
                 else:
                     raw_splits = np.array([])
 

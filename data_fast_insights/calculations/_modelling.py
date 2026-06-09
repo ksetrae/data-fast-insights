@@ -52,10 +52,6 @@ def calculate_dependence(model_data: 'BinaryDependenceModelData' = None) -> pd.D
              'target_mean': 0, 'target_median': 0},
             orient='index')
 
-    # if not model_data.is_data_converted:
-    #     warnings.warn("""Features in model_data seem to not be converted to binary format yet,
-    #     calculate_dependence() might return wrong output.
-    #     """)
     df_features = model_data.data.drop(model_data.y_name, axis=1)
     res_total = pd.DataFrame(
         df_features.sum(axis=0), columns=['count']).sort_values(by='count', ascending=False)
@@ -78,6 +74,7 @@ def calculate_dependence(model_data: 'BinaryDependenceModelData' = None) -> pd.D
     # res_low['base_min'] = np.nan
     # res_low['base_max'] = np.nan
     res_low['base_cats'] = ''
+    res_low['base_cats'] = res_low['base_cats'].astype(object)
     res_low['target_mean'] = np.nan
     res_low['target_median'] = np.nan
 
