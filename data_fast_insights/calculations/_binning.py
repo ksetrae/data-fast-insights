@@ -127,7 +127,7 @@ def get_optbinning_bins(
                 lower_str = _format_clean_float(intervals[i])
                 upper_str = _format_clean_float(intervals[i + 1])
 
-                bin_labels.append(f"[{lower_str},{upper_str})")
+                bin_labels.append(f"[{lower_str}, {upper_str})")
 
                 break_labels.append(upper_str)
 

@@ -48,7 +48,7 @@ def change_interval_name_for_plot(is_numeric: bool, interval_string: str, unit_n
             raise ValueError("Invalid interval string")
 
         s0, s1 = interval_string.strip('[]()').split(',')
-        return f'from {s0}{unit_name_} up to {s1} {unit_name_}'
+        return f'from {s0}{unit_name_} up to{s1} {unit_name_}'
     else:
         logging.warning(f'Cannot process interval string: {interval_string}')
     return interval_string
