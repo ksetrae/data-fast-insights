@@ -105,6 +105,10 @@ def calculate_dependence(model_data: 'BinaryDependenceModelData' = None) -> pd.D
             elif base_col in model_data.cat_cols:
                 res_low.at[i, 'base_cats'] = model_data.base_data[base_col].unique()
     res_low = res_low.sort_values(by='low_perc', ascending=False)
+
+    # reorder so that interval order is correct
+    res_low = res_low.reindex(list(model_data.col_links.keys()))
+
     return res_low
 
 def compare_intervals(selected: str, model_data: 'BinaryDependenceModelData') -> pd.DataFrame:
