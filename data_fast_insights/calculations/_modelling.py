@@ -23,17 +23,17 @@ def calculate_dependence(model_data: 'BinaryDependenceModelData' = None) -> pd.D
     pd.DataFrame
         DataFrame with data about dependence between features and target
         Columns description:
-            total_sum - sum of the binary feature values (size of the segment, absolute)
-            low_sum - sum of the binary feature values where binary target equals 1
+            count - sum of the binary feature values (size of the segment, absolute)
+            low_count - sum of the binary feature values where binary target equals 1
                 (how much segment entries are lower than the selected
                 target threshold (e.g. median or mean))
-            low_perc - (low_sum / total_sum) * 100 (how bad the segment is, in percent).
+            low_perc - (low_count / count) * 100 (how bad the segment is, in percent).
                 It represents the share of objects (rows) that are lower than the selected
                 target threshold (e.g. median or mean) of all segment objects.
             high_perc - (100 - low_perc).
             perc_of_total - segment share of total data, in percent (size of the segment, relative).
                 Total "perc_of_total" of all segments across one base (original) feature equals 1.
-            target_delta_perc - how much target mean of this segment differs from total target mean, in percent
+            target_delta - how much target mean of this segment differs from total target mean, in percent
             group_importance - relative segment size multiplied by difference of segment target from total target.
                 More precisely:
                     (count_segment_objects/count_total_objects) * avg(segment_target) - avg(total_target)
@@ -46,8 +46,8 @@ def calculate_dependence(model_data: 'BinaryDependenceModelData' = None) -> pd.D
     """
     if model_data is None:
         return pd.DataFrame.from_dict(
-            {'total_sum': 0, 'low_sum': 0, 'low_perc': 0, 'high_perc': 0, 'perc_of_total': 0,
-             'target_delta_perc': 0, 'group_importance': 0,
+            {'count': 0, 'low_count': 0, 'low_perc': 0, 'high_perc': 0, 'perc_of_total': 0,
+             'target_delta': 0, 'group_importance': 0,
              'base_col': '', 'base_breaks': list(), 'base_range': list(), 'base_cats': list()},
             orient='index')
 
@@ -57,15 +57,15 @@ def calculate_dependence(model_data: 'BinaryDependenceModelData' = None) -> pd.D
     #     """)
     df_features = model_data.data.drop(model_data.y_name, axis=1)
     res_total = pd.DataFrame(
-        df_features.sum(axis=0), columns=['total_sum']).sort_values(by='total_sum', ascending=False)
+        df_features.sum(axis=0), columns=['count']).sort_values(by='count', ascending=False)
 
     df_low = df_features[df_features[model_data.y_binary_name] == 1].drop(model_data.y_binary_name, axis=1).copy()
-    res_low = pd.DataFrame(df_low.sum(axis=0), columns=['low_sum'])
+    res_low = pd.DataFrame(df_low.sum(axis=0), columns=['low_count'])
     res_low = pd.merge(res_total, res_low, left_index=True, right_index=True)
-    res_low['low_perc'] = (res_low['low_sum'] / res_low['total_sum']) * 100
+    res_low['low_perc'] = (res_low['low_count'] / res_low['count']) * 100
     res_low['high_perc'] = 100 - res_low['low_perc']
-    res_low['perc_of_total'] = (res_low['total_sum'] / model_data.data.shape[0]) * 100
-    res_low['target_delta_perc'] = np.nan
+    res_low['perc_of_total'] = (res_low['count'] / model_data.data.shape[0]) * 100
+    res_low['target_delta'] = np.nan
     res_low['group_importance'] = np.nan
 
     res_low['base_col'] = ''
@@ -77,17 +77,20 @@ def calculate_dependence(model_data: 'BinaryDependenceModelData' = None) -> pd.D
     # res_low['base_min'] = np.nan
     # res_low['base_max'] = np.nan
     res_low['base_cats'] = ''
-    res_low['target_agg'] = np.nan
+    res_low['target_mean'] = np.nan
+    res_low['target_median'] = np.nan
 
     # TODO: change from .iterrows() to faster type of iterations (e.g. zip() on series?)
+    total_mean = model_data.data[model_data.y_name].mean()
     for i, row in res_low.iterrows():
-        res_low.at[i, 'target_delta_perc'] = ((model_data.data[model_data.data[i] == 1][model_data.y_name].mean() /
-                                              model_data.data[model_data.y_name].mean()) - 1) * 100
-        res_low.at[i, 'target_agg'] = model_data.data[model_data.data[i] == 1][model_data.y_name].mean()
+        segment_target_data = model_data.data[model_data.data[i] == 1][model_data.y_name]
+        res_low.at[i, 'target_delta'] = ((segment_target_data.mean() /
+                                              total_mean) - 1) * 100
+        res_low.at[i, 'target_mean'] = segment_target_data.mean()
+        res_low.at[i, 'target_median'] = segment_target_data.median()
         res_low.at[i, 'group_importance'] = \
             (model_data.data[model_data.data[i] == 1].shape[0] / model_data.data.shape[0]) * \
-            (model_data.data[model_data.data[i] == 1][model_data.y_name].mean() -
-                model_data.data[model_data.y_name].mean())
+            (segment_target_data.mean() - total_mean)
 
         if i in model_data.col_links:
             base_col = model_data.col_links[i]

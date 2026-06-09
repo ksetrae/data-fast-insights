@@ -117,15 +117,15 @@ print(res)
 ```
 _Output_:
 ```
-                         total_sum  low_sum   low_perc   high_perc  \
-max_speed_[-inf,100.0)        3.0        2  66.666667   33.333333   
-age_[-inf,inf)                6.0        3  50.000000   50.000000   
-color_red                     4.0        2  50.000000   50.000000   
-color_green                   2.0        1  50.000000   50.000000   
-max_speed_[100.0,inf)         2.0        1  50.000000   50.000000   
-max_speed_missing             1.0        0   0.000000  100.000000   
+                            count low_count   low_perc   high_perc  \
+max_speed_[-inf,100.0)        3.0         2  66.666667   33.333333   
+age_[-inf,inf)                6.0         3  50.000000   50.000000   
+color_red                     4.0         2  50.000000   50.000000   
+color_green                   2.0         1  50.000000   50.000000   
+max_speed_[100.0,inf)         2.0         1  50.000000   50.000000   
+max_speed_missing             1.0         0   0.000000  100.000000   
 
-                        perc_of_total  target_delta_perc   base_col  \
+                        perc_of_total  target_delta        base_col  \
 max_speed_[-inf,100.0)      50.000000         -19.512195  max_speed   
 age_[-inf,inf)             100.000000           0.000000        age   
 color_red                   66.666667          -2.682927      color   
@@ -144,17 +144,17 @@ max_speed_missing       [missing, 100.0, inf]  [60.0, 110.0]
 #### Output description: 
 Index is the name of a binary variable (segment).  
 Columns:
-- total_sum - sum of the binary feature values (size of the segment, absolute)
-- low_sum - sum of the binary feature values where binary target equals 1
+- count - sum of the binary feature values (size of the segment, absolute)
+- low_count - sum of the binary feature values where binary target equals 1
     (how much segment entries are lower than the selected
                 target threshold (e.g. median or mean))
-- low_perc - (low_sum / total_sum) * 100 (how bad the segment is, in percent).  
+- low_perc - (low_count / count) * 100 (how bad the segment is, in percent).  
     It represents the share of objects (rows) that are lower than the selected
                 target threshold (e.g. median or mean) of all segment objects.  
 - high_perc - (100 - low_perc).
 - perc_of_total - segment share of total data, in percent (size of the segment, relative)
     Total "perc_of_total" of all segments across one base (original) feature equals 1.
-- target_delta_perc - how much target mean of this segment differs from total target mean, in percent
+- target_delta - how much target mean of this segment differs from total target mean, in percent
 - base_col - parent feature for segment.  
     If the binary feature is a combination of multiple binary features, it contains json array of parent binary features
 - base_breaks - chosen breaks of intervals of the parent feature (if parent feature is numeric)
@@ -181,10 +181,10 @@ Observations:
   **In short, making fast cars should bring more sales in this example**
  
 Other information about this segment:
-- "total_sum" being equal to 3 is very low for real world data
+- "count" being equal to 3 is very low for real world data
  and such segments shouldn't be analyzed in real datasets (because they are unrepresentative/unstable)
 - "perc_of_total" equals 50.0, which means other 50% of cars have "max_speed" >= 100.0
-- "target_delta_perc" equals to -19.512195, which means average number of sales in this segment is
+- "target_delta" equals to -19.512195, which means average number of sales in this segment is
 19.512195% lower than average number of sales in the whole dataset
 
 

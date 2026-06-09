@@ -62,7 +62,7 @@ There might be problems with plotting in different frontends
 """
 
 plot_segments_basic_info(model_data=dmd, res_low_df=res, base_feature_name='color',
-                         base_feature_rename='Color', unit_name='km/h', resort='target_delta_perc')
+                         base_feature_rename='Color', unit_name='km/h', resort='target_delta')
 
 OTHER_PLOTS = True
 
@@ -95,6 +95,6 @@ if OTHER_PLOTS:
     axs[1].legend(fancybox=True, framealpha=1, loc='upper right', bbox_to_anchor=(1, 1.40))
 
     _, _ = plt.subplots()
-    plot_segments_dependence(dmd, res, 'max_speed', 'target_delta_perc')
+    plot_segments_dependence(dmd, res, 'max_speed', 'target_delta')
 
 plt.show()  # not required in Notebooks
