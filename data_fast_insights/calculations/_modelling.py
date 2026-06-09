@@ -48,7 +48,8 @@ def calculate_dependence(model_data: 'BinaryDependenceModelData' = None) -> pd.D
         return pd.DataFrame.from_dict(
             {'count': 0, 'low_count': 0, 'low_perc': 0, 'high_perc': 0, 'perc_of_total': 0,
              'target_delta': 0, 'group_importance': 0,
-             'base_col': '', 'base_breaks': list(), 'base_range': list(), 'base_cats': list()},
+             'base_col': '', 'base_breaks': list(), 'base_range': list(), 'base_cats': list(),
+             'target_mean': 0, 'target_median': 0},
             orient='index')
 
     # if not model_data.is_data_converted:
