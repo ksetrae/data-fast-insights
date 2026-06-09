@@ -36,7 +36,7 @@ def calculate_dependence(model_data: 'BinaryDependenceModelData' = None) -> pd.D
             target_delta_perc - how much target mean of this segment differs from total target mean, in percent
             group_importance - relative segment size multiplied by difference of segment target from total target.
                 More precisely:
-                    (count_segment_objects/count_total_objects) * abs(avg(segment_target) - avg(total_target))
+                    (count_segment_objects/count_total_objects) * avg(segment_target) - avg(total_target)
             base_col - parent feature for segment.
                 If the binary feature is a combination of multiple binary features,
                 it contains json array of parent binary features
@@ -84,7 +84,7 @@ def calculate_dependence(model_data: 'BinaryDependenceModelData' = None) -> pd.D
                                               model_data.data[model_data.y_name].mean()) - 1) * 100
         res_low.at[i, 'group_importance'] = \
             (model_data.data[model_data.data[i] == 1].shape[0] / model_data.data.shape[0]) * \
-            abs(model_data.data[model_data.data[i] == 1][model_data.y_name].mean() -
+            (model_data.data[model_data.data[i] == 1][model_data.y_name].mean() -
                 model_data.data[model_data.y_name].mean())
 
         if i in model_data.col_links:
