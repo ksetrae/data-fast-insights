@@ -77,11 +77,13 @@ def calculate_dependence(model_data: 'BinaryDependenceModelData' = None) -> pd.D
     # res_low['base_min'] = np.nan
     # res_low['base_max'] = np.nan
     res_low['base_cats'] = ''
+    res_low['target_agg'] = np.nan
 
     # TODO: change from .iterrows() to faster type of iterations (e.g. zip() on series?)
     for i, row in res_low.iterrows():
         res_low.at[i, 'target_delta_perc'] = ((model_data.data[model_data.data[i] == 1][model_data.y_name].mean() /
                                               model_data.data[model_data.y_name].mean()) - 1) * 100
+        res_low.at[i, 'target_agg'] = model_data.data[model_data.data[i] == 1][model_data.y_name].mean()
         res_low.at[i, 'group_importance'] = \
             (model_data.data[model_data.data[i] == 1].shape[0] / model_data.data.shape[0]) * \
             (model_data.data[model_data.data[i] == 1][model_data.y_name].mean() -
