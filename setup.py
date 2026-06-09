@@ -7,7 +7,7 @@ with open('requirements.txt') as f:
 
 setuptools.setup(
     name="data_fast_insights",
-    version="0.2.1.1",
+    version="0.3",
     author="p.gafiatullin; a.tolmachev",
     author_email="p.gafiatullin@xsolla.com",
     description="Analytical module for getting quick insights from data based on central tendency statistics",
@@ -20,5 +20,5 @@ setuptools.setup(
         "Programming Language :: Python :: 3",
         "Operating System :: OS Independent",
     ],
-    python_requires=">=3.7",
+    python_requires=">=3.10",
 )
