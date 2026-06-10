@@ -476,7 +476,7 @@ class BinaryDependenceModelData:
             self.data[segment_name] = self.base_data.index.isin(segment_raw_data.index)
 
             # Same column name for all of these segments for now, don't have an idea how to split them yet
-            self.col_links[segment_name] = 'from_decision_tree_custom'
+            self.col_links[segment_name] = '<from_decision_tree_custom>'
             self.segment_sources[segment_name] = SegmentSource.DECISION_TREE_BINNING
 
     def remove_segment_combinations(self):
