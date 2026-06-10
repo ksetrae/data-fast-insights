@@ -30,6 +30,8 @@ You can find the version history [here](CHANGELOG.md).
 # To be done  
 
 #### Backlog (top priority features)
+- Multi-category segments  
+    At the moment every category is a distinct segment without calculating WoE. 
 - Renaming, deleting, adding features inside the model
 - Improving overall report interpretability
 - Adding new metrics

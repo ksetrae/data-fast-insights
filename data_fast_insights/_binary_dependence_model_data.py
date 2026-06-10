@@ -8,6 +8,8 @@ import json
 import numpy as np
 import pandas as pd
 
+from ._decision_tree_multidim_binning import get_optimized_combination_segments
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -281,8 +283,8 @@ class BinaryDependenceModelData:
                 self.data[binary_name] = np.logical_and(self.data[sel], self.data[other]).astype(int)
                 self.col_links[binary_name] = sel if consider_selected_base else other
 
-    # TODO: display progress in percentage instead of just combination levels
-    def construct_combs_up_to(self, comb_max_size: int) -> None:
+    # TODO: display progress
+    def construct_combs_on_existing_segments(self, comb_max_size: int) -> None:
         """ Binary feature combinations of sizes up to comb_max_size are constructed as binary features.
                 These features equal 1 when all of its members equal 1.
 
@@ -323,7 +325,7 @@ class BinaryDependenceModelData:
         unwanted = {self.y_name, self.y_binary_name}
         binary_features = {c for c in list(self.data.columns) if c not in unwanted}
 
-        for comb_curr_size in range(2, _comb_max_size+1):
+        for comb_curr_size in range(2, _comb_max_size + 1):
             logger.info(f'Working on combinations of level {comb_curr_size} of {_comb_max_size}')
             binary_combs = combinations(binary_features, comb_curr_size)
 
@@ -343,3 +345,24 @@ class BinaryDependenceModelData:
 
                 # sorted so that parts from same 2 base columns always get a same combination
                 self.col_links[binary_name] = str(sorted(base_cols))
+
+    def construct_combs_up_to_decision_tree(
+            self,
+            comb_max_size: int) -> None:
+        res = get_optimized_combination_segments(
+            df=self.base_data.copy(),
+            cat_cols=list(self.cat_cols),
+            num_cols=list(self.num_cols),
+            # target_col=self.y_name,
+
+            # For now we split based on pivoted target value (1 and 0, "good" and "bad".
+            # However, we could probably use a regressor for continuous target, but then
+            # we'd need to change get_optimized_combination_segments() to be adaptive
+            # (regressor for continuous target, classifier for binary/multilabel etc).
+            # This is a "first step" approach, and this also could be better anyway...
+            # target_col=self.y_binary_name,
+            target_data=self.data[self.y_binary_name],
+            max_segments=comb_max_size,
+            # min_segment_size=0.05
+        )
+        return res
