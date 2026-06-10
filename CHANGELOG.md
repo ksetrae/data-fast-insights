@@ -1,3 +1,6 @@
+### 0.4.3.
+* Allow inversed goals (experimental)
+
 ### 0.4.2
 * Now sorting by target_delta_by_volume
 * Remove group_importance

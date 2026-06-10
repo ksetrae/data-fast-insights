@@ -101,7 +101,7 @@ def calculate_dependence(model_data: 'BinaryDependenceModelData' = None) -> pd.D
         else:
             raise ValueError("Segment name not found in links")
 
-    res_low = res_low.sort_values(by='target_delta_by_volume', ascending=False)
+    res_low = res_low.sort_values(by='target_delta_by_volume', ascending=model_data.inverse_goal)
 
     return res_low
 

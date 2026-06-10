@@ -40,8 +40,10 @@ class BinaryDependenceModelData:
                  cat_cols: Optional[Iterable[str]] = None,
                  num_cols: Optional[Iterable[str]] = None,
                  y_type: Optional[str] = "quantile",
+                 y_quantile: Optional[float] = 0.5,
                  exclude_zero_var: Optional[bool] = True,
-                 **kwargs) -> None:
+                 inverse_goal: Optional[bool] = False,
+                 ) -> None:
         """ Initialize object that holds all information about features and target in its attributes.
             This object is supposed to be used further in the calculations of target analysis model.
 
@@ -73,6 +75,12 @@ class BinaryDependenceModelData:
                 - checks numeric features and excludes those having variance = 0
             In case you've passed a dataset with such features already excluded, you might set this to False
             for potential speed up
+
+        inverse_goal
+            EXPERIMENTAL
+            By default higher values of target are considered "better". Setting this to True
+            will make it so that higher values are considered to be worsening the target.
+            E.g. if target is handling time and you want to reduce it
         """
         if not isinstance(base_data, pd.DataFrame):
             raise TypeError('base_data argument must be a DataFrame object')
@@ -109,7 +117,7 @@ class BinaryDependenceModelData:
         self.target_processing_attrs = dict()
         if y_type == 'quantile':
             self.target_processing_attrs['y_type'] = y_type
-            self.target_processing_attrs['y_quantile'] = kwargs.get('y_quantile', 0.5)
+            self.target_processing_attrs['y_quantile'] = y_quantile
         elif y_type in ('mean', 'binary'):
             self.target_processing_attrs['y_type'] = y_type
         else:
@@ -117,6 +125,7 @@ class BinaryDependenceModelData:
 
         # SET OTHER
         self.exclude_zero_var = exclude_zero_var
+        self.inverse_goal = inverse_goal
 
         # Data for converted features
         self.data = self.base_data[[self.y_name]].copy()
@@ -206,7 +215,13 @@ class BinaryDependenceModelData:
             return
 
         self.y_binary_name = 'is_' + self.y_name + '_lt_' + self.target_processing_attrs['y_type']
-        self.data[self.y_binary_name] = self.base_data[self.y_name] < self.y_pivot
+
+        if self.inverse_goal:
+            self.data[self.y_binary_name] = self.base_data[self.y_name] >= self.y_pivot
+        else:
+            self.data[self.y_binary_name] = self.base_data[self.y_name] < self.y_pivot
+
+
 
     def _convert_cats(self) -> None:
         """ Converting categories to binary (one-hot encoding)
