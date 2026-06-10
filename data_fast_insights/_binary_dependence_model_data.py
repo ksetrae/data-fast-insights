@@ -4,6 +4,7 @@ from itertools import combinations
 import logging
 from collections import OrderedDict
 import enum
+import sys
 
 import numpy as np
 import pandas as pd
@@ -223,8 +224,6 @@ class BinaryDependenceModelData:
         else:
             self.data[self.y_binary_name] = self.base_data[self.y_name] < self.y_pivot
 
-
-
     def _convert_cats(self) -> None:
         """ Converting categories to binary (one-hot encoding)
         """
@@ -330,7 +329,7 @@ class BinaryDependenceModelData:
                 self.col_links[binary_name] = sel if consider_selected_base else other
                 self.segment_sources[binary_name] = SegmentSource.PARTIAL_COMBINATION
 
-    def add_combinations_from_existing_segments(self, comb_max_size: int) -> None:
+    def add_combinations_from_existing_segments(self, comb_max_size: int, progress_frequency: int = 100) -> None:
         """ Binary feature combinations of sizes up to comb_max_size are constructed as binary features.
                 These features equal 1 when all of its members equal 1.
 
@@ -385,9 +384,10 @@ class BinaryDependenceModelData:
         new_segments = {}
         for comb_curr_size in range(2, _comb_max_size + 1):
             logger.info(f'Working on combinations of level {comb_curr_size} of {_comb_max_size}')
-            binary_combs = combinations(binary_features, comb_curr_size)
+            binary_combs = list(combinations(binary_features, comb_curr_size))
 
-            for comb in binary_combs:
+            total = len(binary_combs)
+            for index, comb in enumerate(binary_combs):
 
                 # if at least 2 of base segments have the same base column, it will make up an impossible segment
                 # (non-overlapping intervals)
@@ -413,6 +413,17 @@ class BinaryDependenceModelData:
                 # sorted so that parts from same 2 base columns always get a same combination
                 self.col_links[binary_name] = str(sorted(base_cols))
                 self.segment_sources[binary_name] = SegmentSource.COMBINATION_ON_EXISTING
+
+                if index % progress_frequency == 0:
+                    # display progress
+                    progress = (index + 1) / total
+                    percent = int(progress * 100)
+                    bar_length = 20
+                    filled_length = int(bar_length * progress)
+                    bar = '█' * filled_length + '-' * (bar_length - filled_length)
+                    sys.stdout.write(
+                        f"\rProgress at depth {comb_curr_size} / {_comb_max_size}: [{bar}] {percent}% Complete")
+                    sys.stdout.flush()
 
         # faster than inserting new column often (fragmented dataframe)
         new_df = pd.DataFrame(new_segments)
@@ -465,7 +476,7 @@ class BinaryDependenceModelData:
             self.data[segment_name] = self.base_data.index.isin(segment_raw_data.index)
 
             # Same column name for all of these segments for now, don't have an idea how to split them yet
-            self.col_links[segment_name] = '<from_decision_tree_custom>'
+            self.col_links[segment_name] = 'from_decision_tree_custom'
             self.segment_sources[segment_name] = SegmentSource.DECISION_TREE_BINNING
 
     def remove_segment_combinations(self):
@@ -478,9 +489,9 @@ class BinaryDependenceModelData:
                 continue
 
             if self.segment_sources[c] in (
-                SegmentSource.PARTIAL_COMBINATION,
-                SegmentSource.COMBINATION_ON_EXISTING,
-                SegmentSource.DECISION_TREE_BINNING
+                    SegmentSource.PARTIAL_COMBINATION,
+                    SegmentSource.COMBINATION_ON_EXISTING,
+                    SegmentSource.DECISION_TREE_BINNING
             ):
                 continue
 
