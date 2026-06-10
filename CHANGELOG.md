@@ -1,3 +1,7 @@
+### 0.4.2
+* Now sorting by target_delta_by_volume
+* Remove group_importance
+* Introduce decision tree based combination binning
 
 ### 0.4.1
 * Rework base_cols of combined segments for better visual representation

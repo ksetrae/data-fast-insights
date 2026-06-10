@@ -1,52 +1,102 @@
 import numpy as np
 import pandas as pd
-from sklearn.tree import DecisionTreeClassifier, _tree
+from sklearn.tree import DecisionTreeRegressor, _tree
+
+
 from collections import defaultdict
 
-def get_optimized_combination_segments(
+def reduce_overlapping_segments(raw_segments: list) -> list:
+    """
+    - Squashes nested continuous bounds (e.g., '<= 5.04' AND '<= 3.07' becomes '<= 3.07').
+    - Consolidates nested one-hot inclusions into unified distinct structures.
+    """
+    unique_segments = []
+    seen_representations = set()
+
+    for seg in raw_segments:
+        # 1. Squash Numerical Overlaps
+        num_bounds = defaultdict(lambda: {"min": -np.inf, "max": np.inf})
+        for col, op, val in seg["num"]:
+            if op == "<=":
+                num_bounds[col]["max"] = min(num_bounds[col]["max"], val)
+            elif op == ">":
+                num_bounds[col]["min"] = max(num_bounds[col]["min"], val)
+
+        clean_num = []
+        for col, bounds in num_bounds.items():
+            if bounds["min"] != -np.inf:
+                clean_num.append((col, ">", bounds["min"]))
+            if bounds["max"] != np.inf:
+                clean_num.append((col, "<=", bounds["max"]))
+
+        # 2. Squash Categorical Overlaps
+        cat_inc_map = defaultdict(set)
+        for col, val in seg["cat_include"]:
+            cat_inc_map[col].add(val)
+
+        cat_exc_map = defaultdict(set)
+        for col, val in seg["cat_exclude"]:
+            cat_exc_map[col].add(val)
+
+        # Re-format back to unified clean tuples
+        clean_inc = [(col, sorted(list(vals))) for col, vals in cat_inc_map.items()]
+        clean_exc = [(col, sorted(list(vals))) for col, vals in cat_exc_map.items()]
+
+        # 3. Structural De-duplication Check
+        # Convert our cleaned properties to an immutable string tuple key to ensure strict unique outputs
+        struct_fingerprint = (
+            tuple(sorted(clean_num)),
+            tuple(sorted((c, tuple(v)) for c, v in clean_inc)),
+            tuple(sorted((c, tuple(v)) for c, v in clean_exc))
+        )
+
+        if struct_fingerprint not in seen_representations:
+            seen_representations.add(struct_fingerprint)
+            unique_segments.append({
+                "num": clean_num,
+                "cat_include": clean_inc,
+                "cat_exclude": clean_exc
+            })
+
+    return unique_segments
+
+
+
+def get_optimized_combination_splits(
         df: pd.DataFrame,
         cat_cols: list,
         num_cols: list,
-        target_data: pd.Series,
-        max_segments: int = 6,
-        min_segment_size: float = 0.05
-) -> pd.Series:
-    y = target_data.copy().values
-
+        target_name: str,
+        max_segments: int,
+        max_depth: int | None
+) -> list:
+    """
+    Trains a DecisionTreeRegressor and parses leaves into a
+    representation of numerical bounds and categorical requirements.
+    """
+    y = df[target_name].values
     X_num = df[num_cols].copy() if num_cols else pd.DataFrame(index=df.index)
 
-    # Keep track of mapping arrays to invert one-hot column names back to original values
     one_hot_mappings = {}
     X_cat_encoded = pd.DataFrame(index=df.index)
 
     if cat_cols:
         for col in cat_cols:
-            # Generate one-hot columns while keeping NaNs cleanly isolated
             dummies = pd.get_dummies(df[col], prefix=col, prefix_sep="___", dummy_na=False)
-
-            # Map the generated one-hot features back to their source category string names
             for dummy_col in dummies.columns:
-                # Splitting by "___" and taking the remainder handles category recovery safely
                 category_value = dummy_col.split("___")[-1]
                 one_hot_mappings[dummy_col] = (col, category_value)
-
             X_cat_encoded = pd.concat([X_cat_encoded, dummies], axis=1)
 
-    # Combine numerical variables with our mapped binary one-hot switches
     X_total = pd.concat([X_num, X_cat_encoded], axis=1)
-
     if X_total.empty:
         raise ValueError("No valid overlapping variables detected inside cat_cols or num_cols definitions.")
 
-    # 2. Train the structural tree classifier to maximize information value (IV)
-    # FORCE COMBINATIONS: We restrict max_features and drop min_impurity_decrease
-    # to force the tree to find deep multi-variable interaction segments.
-    clf = DecisionTreeClassifier(
-        criterion="entropy",
+    clf = DecisionTreeRegressor(
+        criterion="squared_error",
         max_leaf_nodes=max_segments,
-        min_samples_leaf=min_segment_size,
-        max_features="sqrt",             # Forces the tree to search across different columns
-        min_impurity_decrease=0.0,       # Guarantees it keeps splitting up to max_segments
+        max_depth=max_depth,
+        min_samples_leaf=1,
         random_state=42
     )
     clf.fit(X_total, y)
@@ -54,75 +104,88 @@ def get_optimized_combination_segments(
     tree_ = clf.tree_
     feature_names = X_total.columns.tolist()
 
-    # 3. Recursive leaf path traversal tool with integrated categorical grouping
     def get_leaf_paths(node, current_constraints):
         if tree_.feature[node] != _tree.TREE_UNDEFINED:
             f_name = feature_names[tree_.feature[node]]
             threshold = tree_.threshold[node]
 
-            # Scenario A: The splitting attribute is a one-hot categorical variable
             if f_name in one_hot_mappings:
                 orig_col, cat_val = one_hot_mappings[f_name]
-
                 left_constraints = [dict(c) for c in current_constraints]
                 right_constraints = [dict(c) for c in current_constraints]
 
-                # Left child: encoded feature <= 0.5 (Object does NOT match this category)
                 left_constraints.append({"type": "cat_exclude", "col": orig_col, "val": cat_val})
-                # Right child: encoded feature > 0.5 (Object DOES match this category)
                 right_constraints.append({"type": "cat_include", "col": orig_col, "val": cat_val})
 
                 return get_leaf_paths(tree_.children_left[node], left_constraints) + \
                     get_leaf_paths(tree_.children_right[node], right_constraints)
-
-            # Scenario B: The splitting attribute is standard continuous numeric variables
             else:
                 thresh_rounded = round(float(threshold), 2)
                 left_constraints = [dict(c) for c in current_constraints] + [
-                    {"type": "num", "expr": f"{f_name}_<={thresh_rounded}"}]
-                # FIX: Added clear '>' operator indicating upper numerical ranges
+                    {"type": "num", "col": f_name, "op": "<=", "val": thresh_rounded}]
                 right_constraints = [dict(c) for c in current_constraints] + [
-                    {"type": "num", "expr": f"{f_name}_{thresh_rounded}"}]
+                    {"type": "num", "col": f_name, "op": ">", "val": thresh_rounded}]
 
                 return get_leaf_paths(tree_.children_left[node], left_constraints) + \
                     get_leaf_paths(tree_.children_right[node], right_constraints)
         else:
-            # 4. Collapse and restructure branch constraints into an intuitive segment string
-            num_parts = []
-            cat_includes = defaultdict(list)
-            cat_excludes = defaultdict(list)
-
+            # Build a structured row definition
+            # Rather than strings, we group criteria into dictionary objects
+            segment_struct = {
+                "num": [],  # list of tuples: (col, op, val)
+                "cat_include": [],  # list of tuples: (col, val)
+                "cat_exclude": []  # list of tuples: (col, val)
+            }
             for c in current_constraints:
                 if c["type"] == "num":
-                    num_parts.append(c["expr"])
+                    segment_struct["num"].append((c["col"], c["op"], c["val"]))
                 elif c["type"] == "cat_include":
-                    cat_includes[c["col"]].append(c["val"])
+                    segment_struct["cat_include"].append((c["col"], c["val"]))
                 elif c["type"] == "cat_exclude":
-                    cat_excludes[c["col"]].append(c["val"])
+                    segment_struct["cat_exclude"].append((c["col"], c["val"]))
 
-            # Consolidate categorical strings into clear 'IN' or 'NOT IN' statements
-            cat_parts = []
-            all_cat_cols = set(list(cat_includes.keys()) + list(cat_excludes.keys()))
+            return [segment_struct]
 
-            for c_col in all_cat_cols:
-                if c_col in cat_includes:
-                    cats_str = ", ".join(f"'{v}'" for v in sorted(cat_includes[c_col]))
-                    cat_parts.append(f"{c_col}_IN_({cats_str})")
-                elif c_col in cat_excludes:
-                    cats_str = ", ".join(f"'{v}'" for v in sorted(cat_excludes[c_col]))
-                    cat_parts.append(f"{c_col}_NOT_IN_({cats_str})")
+    raw_leaf_structures = get_leaf_paths(0, [])
 
-            final_parts = num_parts + cat_parts
-            segment_string = "_AND_".join(final_parts) if final_parts else "All_Data"
-            return [(node, segment_string)]
+    # Run structural cleanup to minimize, combine, and squash overlaps
+    cleaned_segments = reduce_overlapping_segments(raw_leaf_structures)
 
-    # Generate the leaf mapping index table using clean strings
-    leaf_mappings = dict(get_leaf_paths(0, []))
+    return cleaned_segments
 
-    # Calculate row leaf assignments instantly
-    row_leaf_indices = clf.apply(X_total)
 
-    combination_segments = pd.Series(row_leaf_indices).map(leaf_mappings)
-    combination_segments.index = df.index
+def compile_splits_to_string_interval(seg: dict) -> str:
+    # Group numeric bounds by feature to display clean ranges if bounded on both sides
+    num_by_feature = defaultdict(lambda: {"min": None, "max": None})
+    for col, op, val in seg["num"]:
+        if op == ">":
+            num_by_feature[col]["min"] = val
+        elif op == "<=":
+            num_by_feature[col]["max"] = val
 
-    return combination_segments
+    num_parts = []
+    for col, bounds in num_by_feature.items():
+        l_bound = bounds["min"]
+        u_bound = bounds["max"]
+
+        if l_bound is not None and u_bound is not None:
+            # Collapses sequential splits into a unified bracket string notation
+            num_parts.append(f"{col}_({l_bound},{u_bound}]")
+        elif l_bound is not None:
+            num_parts.append(f"{col}_>{l_bound}")
+        elif u_bound is not None:
+            num_parts.append(f"{col}_<={u_bound}")
+
+    # Construct categorical representations
+    cat_parts = []
+    for col, vals in seg["cat_include"]:
+        cats_str = ", ".join(f"'{v}'" for v in vals)
+        cat_parts.append(f"{col}_IN_({cats_str})")
+
+    for col, vals in seg["cat_exclude"]:
+        cats_str = ", ".join(f"'{v}'" for v in vals)
+        cat_parts.append(f"{col}_NOT_IN_({cats_str})")
+
+    final_parts = num_parts + cat_parts
+    segment_string = "_AND_".join(final_parts) if final_parts else "All_Data"
+    return segment_string

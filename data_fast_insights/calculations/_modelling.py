@@ -2,6 +2,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
+from matplotlib.lines import segment_hits
 
 from data_fast_insights import utils
 
@@ -34,9 +35,9 @@ def calculate_dependence(model_data: 'BinaryDependenceModelData' = None) -> pd.D
             perc_of_total - segment share of total data, in percent (size of the segment, relative).
                 Total "perc_of_total" of all segments across one base (original) feature equals 1.
             target_delta - how much target mean of this segment differs from total target mean, in percent
-            group_importance - relative segment size multiplied by difference of segment target from total target.
-                More precisely:
-                    (count_segment_objects/count_total_objects) * avg(segment_target) - avg(total_target)
+            target_delta_by_volume - (target_delta * perc_of_total) / 100
+                Used to estimate total effect of the segment with consideration how large it is.
+                Small segments can differ significantly, but be insignificant itself
             base_col - parent feature for segment.
                 If the binary feature is a combination of multiple binary features,
                 it contains json array of parent binary features
@@ -47,7 +48,7 @@ def calculate_dependence(model_data: 'BinaryDependenceModelData' = None) -> pd.D
     if model_data is None:
         return pd.DataFrame.from_dict(
             {'count': 0, 'low_count': 0, 'low_perc': 0, 'high_perc': 0, 'perc_of_total': 0,
-             'target_delta': 0, 'group_importance': 0,
+             'target_delta': 0, 'target_delta_by_volume': 0,
              'base_col': '', 'base_breaks': list(), 'base_range': list(), 'base_cats': list(),
              'target_mean': 0, 'target_median': 0},
             orient='index')
@@ -63,7 +64,7 @@ def calculate_dependence(model_data: 'BinaryDependenceModelData' = None) -> pd.D
     res_low['high_perc'] = 100 - res_low['low_perc']
     res_low['perc_of_total'] = (res_low['count'] / model_data.data.shape[0]) * 100
     res_low['target_delta'] = np.nan
-    res_low['group_importance'] = np.nan
+    res_low['target_delta_by_volume'] = np.nan
 
     res_low['base_col'] = ''
     res_low['base_breaks'] = ''
@@ -81,20 +82,16 @@ def calculate_dependence(model_data: 'BinaryDependenceModelData' = None) -> pd.D
     # TODO: change from .iterrows() to faster type of iterations (e.g. zip() on series?)
     total_mean = model_data.data[model_data.y_name].mean()
     for i, row in res_low.iterrows():
-        segment_target_data = model_data.data[model_data.data[i] == 1][model_data.y_name]
-        res_low.at[i, 'target_delta'] = ((segment_target_data.mean() /
-                                              total_mean) - 1) * 100
-        res_low.at[i, 'target_mean'] = segment_target_data.mean()
-        res_low.at[i, 'target_median'] = segment_target_data.median()
-        res_low.at[i, 'group_importance'] = \
-            (model_data.data[model_data.data[i] == 1].shape[0] / model_data.data.shape[0]) * \
-            (segment_target_data.mean() - total_mean)
+        segment_target = model_data.data[model_data.data[i] == 1][model_data.y_name]
+        segment_target_delta = ((segment_target.mean() / total_mean) - 1) * 100.0
+        res_low.at[i, 'target_delta'] = segment_target_delta
+        res_low.at[i, 'target_mean'] = segment_target.mean()
+        res_low.at[i, 'target_median'] = segment_target.median()
+        res_low.at[i, 'target_delta_by_volume'] = (segment_target_delta * res_low.at[i, 'perc_of_total']) / 100.0
 
         if i in model_data.col_links:
             base_col = model_data.col_links[i]
             res_low.at[i, 'base_col'] = base_col
-            # res_low.at[i, 'base_central_value'] = model_data.base_data[base_col].__getattribute__(
-            #     utils.choose_central_tendency_metric(base_col, model_data))()
             if base_col in model_data.num_cols:
                 res_low.at[i, 'base_range'] = str([model_data.base_data[base_col].min(),
                                                    model_data.base_data[base_col].max()])
@@ -104,7 +101,7 @@ def calculate_dependence(model_data: 'BinaryDependenceModelData' = None) -> pd.D
         else:
             raise ValueError("Segment name not found in links")
 
-    res_low = res_low.sort_values(by='group_importance', ascending=False)
+    res_low = res_low.sort_values(by='target_delta_by_volume', ascending=False)
 
     return res_low
 

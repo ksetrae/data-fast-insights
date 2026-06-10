@@ -4,14 +4,22 @@ from itertools import combinations
 import logging
 from collections import OrderedDict
 import json
+import enum
 
 import numpy as np
 import pandas as pd
 
-from ._decision_tree_multidim_binning import get_optimized_combination_segments
+from ._decision_tree_multidim_binning import get_optimized_combination_splits, compile_splits_to_string_interval
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+
+class SegmentSource(enum.Enum):
+    PRIMARY_BINNING = 1
+    PARTIAL_COMBINATION = 2
+    COMBINATION_ON_EXISTING = 3
+    DECISION_TREE_BINNING = 4
 
 
 class BinaryDependenceModelData:
@@ -22,6 +30,8 @@ class BinaryDependenceModelData:
 
         Attributes description is to be done.
     """
+
+    RESERVED_SUBSTRINGS = {'_AND_', '_IN_', '_NOT_IN_', '<=', '>'}
 
     # TODO: attributes description, since they are useful
     def __init__(self,
@@ -68,6 +78,14 @@ class BinaryDependenceModelData:
             raise TypeError('base_data argument must be a DataFrame object')
         self.base_data = base_data.copy()
 
+        # CHECK RESERVED SUBSTRINGS
+        # I don't know if allowing them will cause problems, but just in case we'll disallow them
+        for col in set(cat_cols).union(set(num_cols)).union({y_name}):
+            for reserve in self.RESERVED_SUBSTRINGS:
+                if reserve in col:
+                    raise ValueError(f'Reserved substring {reserve} was found in column name: {col}. '
+                                     f'Please rename the column.')
+
         # SET CATEGORICAL AND NUMERIC COLUMNS
         try:
             self.cat_cols = set(cat_cols) if cat_cols is not None else set()
@@ -108,6 +126,8 @@ class BinaryDependenceModelData:
         self.bins = None
         self.y_binary_name = None
         self.is_data_converted = False
+
+        self.segment_sources: dict[str, SegmentSource] = dict()
 
         self._reset_binary_data()
 
@@ -196,6 +216,7 @@ class BinaryDependenceModelData:
                 binary_name = col + '_' + str(val)
                 self.data[binary_name] = (self.base_data[col] == val).astype(int)
                 self.col_links[binary_name] = col
+                self.segment_sources[binary_name] = SegmentSource.PRIMARY_BINNING
         # self.data = self.data.drop(self.cat_cols, 1)
 
     def _convert_nums(self, bins: dict) -> None:
@@ -212,6 +233,7 @@ class BinaryDependenceModelData:
                     self.data[binary_name] = np.where(
                         (self.base_data[col] >= float(lb)) & (self.base_data[col] < float(rb)), 1, 0)
                 self.col_links[binary_name] = col
+                self.segment_sources[binary_name] = SegmentSource.PRIMARY_BINNING
         # self.data = self.data.drop(self.num_cols, 1)
 
     def convert_to_binary(self,
@@ -282,9 +304,9 @@ class BinaryDependenceModelData:
                 binary_name = sel + '_AND_' + other
                 self.data[binary_name] = np.logical_and(self.data[sel], self.data[other]).astype(int)
                 self.col_links[binary_name] = sel if consider_selected_base else other
+                self.segment_sources[binary_name] = SegmentSource.PARTIAL_COMBINATION
 
-    # TODO: display progress
-    def construct_combs_on_existing_segments(self, comb_max_size: int) -> None:
+    def add_combinations_from_existing_segments(self, comb_max_size: int) -> None:
         """ Binary feature combinations of sizes up to comb_max_size are constructed as binary features.
                 These features equal 1 when all of its members equal 1.
 
@@ -323,13 +345,25 @@ class BinaryDependenceModelData:
             logging.warning(f'Using high comb_max_size ({comb_max_size}), calculations might take some time.')
 
         unwanted = {self.y_name, self.y_binary_name}
-        binary_features = {c for c in list(self.data.columns) if c not in unwanted}
+
+        binary_features = set()
+        'c for c in list(self.data.columns) if c not in unwanted'
+        for c in list(self.data.columns):
+            if c in unwanted:
+                continue
+
+            # skip combination segments that were created by other methods or this one earlier calls
+            if self.segment_sources[c] != SegmentSource.PRIMARY_BINNING:
+                continue
+
+            binary_features.add(c)
 
         for comb_curr_size in range(2, _comb_max_size + 1):
             logger.info(f'Working on combinations of level {comb_curr_size} of {_comb_max_size}')
             binary_combs = combinations(binary_features, comb_curr_size)
 
             for comb in binary_combs:
+
                 binary_name = '_AND_'.join(comb)
                 self.data[binary_name] = np.logical_and.reduce([self.data[col] for col in comb]).astype(int)
 
@@ -345,24 +379,70 @@ class BinaryDependenceModelData:
 
                 # sorted so that parts from same 2 base columns always get a same combination
                 self.col_links[binary_name] = str(sorted(base_cols))
+                self.segment_sources[binary_name] = SegmentSource.COMBINATION_ON_EXISTING
 
-    def construct_combs_up_to_decision_tree(
+    def add_combinations_from_decision_tree(
             self,
-            comb_max_size: int) -> None:
-        res = get_optimized_combination_segments(
+            comb_max_size: int | None,
+            comb_max_count: int
+    ) -> None:
+        res = get_optimized_combination_splits(
             df=self.base_data.copy(),
             cat_cols=list(self.cat_cols),
             num_cols=list(self.num_cols),
-            # target_col=self.y_name,
+            target_name=self.y_name,
 
-            # For now we split based on pivoted target value (1 and 0, "good" and "bad".
-            # However, we could probably use a regressor for continuous target, but then
-            # we'd need to change get_optimized_combination_segments() to be adaptive
-            # (regressor for continuous target, classifier for binary/multilabel etc).
-            # This is a "first step" approach, and this also could be better anyway...
-            # target_col=self.y_binary_name,
-            target_data=self.data[self.y_binary_name],
-            max_segments=comb_max_size,
-            # min_segment_size=0.05
+            max_segments=comb_max_count,
+            max_depth=comb_max_size,
         )
-        return res
+
+        # Comparison will be by index, so it's helpful to check these weren't altered.
+        #  This still doesn't check that the order of values itself weren't altered
+        if not self.base_data.index.identical(self.data.index):
+            raise ValueError("Base data and binary data index mismatch")
+
+        for segment in res:
+            segment_raw_data = self.base_data.copy()
+            if segment['num']:
+                for num_feat in segment['num']:
+                    num_feat_name, num_feat_condition, num_feat_value = num_feat
+                    if num_feat_condition == '<=':
+                        segment_raw_data = segment_raw_data[segment_raw_data[num_feat_name] <= num_feat_value]
+                    elif num_feat_condition == '>':
+                        segment_raw_data = segment_raw_data[segment_raw_data[num_feat_name] > num_feat_value]
+                    else:
+                        raise ValueError("Unknown condition")
+            if segment['cat_include']:
+                cat_feat_name, allowed_cats = segment['cat_include']
+                segment_raw_data = segment_raw_data[segment_raw_data[cat_feat_name].isin(allowed_cats)]
+            if segment['cat_exclude']:
+                cat_feat_name, forbidden_cats = segment['cat_exclude']
+                segment_raw_data = segment_raw_data[~segment_raw_data[cat_feat_name].isin(forbidden_cats)]
+
+            segment_name = compile_splits_to_string_interval(segment)
+
+            self.data[segment_name] = self.base_data.index.isin(segment_raw_data.index)
+
+            # Same column name for all of these segments for now, don't have an idea how to split them yet
+            self.col_links[segment_name] = 'from_decision_tree_custom'
+            self.segment_sources[segment_name] = SegmentSource.DECISION_TREE_BINNING
+
+    def remove_segment_combinations(self):
+        to_exclude = []
+        for c in self.data.columns:
+            if c == self.y_name:
+                continue
+
+            if c == self.y_binary_name:
+                continue
+
+            if self.segment_sources[c] in (
+                SegmentSource.PARTIAL_COMBINATION,
+                SegmentSource.COMBINATION_ON_EXISTING,
+                SegmentSource.DECISION_TREE_BINNING
+            ):
+                continue
+
+        self.data.drop(to_exclude, axis=1)
+        for c in to_exclude:
+            del self.col_links[c]
