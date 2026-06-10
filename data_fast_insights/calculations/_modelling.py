@@ -11,13 +11,18 @@ if TYPE_CHECKING:
     from data_fast_insights import BinaryDependenceModelData
 
 
-def calculate_dependence(model_data: 'BinaryDependenceModelData' = None) -> pd.DataFrame:
+def calculate_dependence(
+        model_data: 'BinaryDependenceModelData' = None,
+        sort_from_best_to_worst: bool = True,
+
+) -> pd.DataFrame:
     """ Calculate dependence on target for features in model_data
 
     Parameters
     ----------
     model_data
         If not set, return a dataframe with a row of default values
+    sort_from_best_to_worst
 
     Returns
     -------
@@ -25,13 +30,13 @@ def calculate_dependence(model_data: 'BinaryDependenceModelData' = None) -> pd.D
         DataFrame with data about dependence between features and target
         Columns description:
             count - sum of the binary feature values (size of the segment, absolute)
-            low_count - sum of the binary feature values where binary target equals 1
+            worse_count - sum of the binary feature values where binary target equals 1
                 (how much segment entries are lower than the selected
                 target threshold (e.g. median or mean))
-            low_perc - (low_count / count) * 100 (how bad the segment is, in percent).
+            worse_perc - (worse_count / count) * 100 (how bad the segment is, in percent).
                 It represents the share of objects (rows) that are lower than the selected
                 target threshold (e.g. median or mean) of all segment objects.
-            high_perc - (100 - low_perc).
+            better_perc - (100 - worse_perc).
             perc_of_total - segment share of total data, in percent (size of the segment, relative).
                 Total "perc_of_total" of all segments across one base (original) feature equals 1.
             target_delta - how much target mean of this segment differs from total target mean, in percent
@@ -44,10 +49,11 @@ def calculate_dependence(model_data: 'BinaryDependenceModelData' = None) -> pd.D
             base_breaks - chosen breaks of intervals of the parent feature (if parent feature is numeric)
             base_range - min and max values of the parent feature (if parent feature is numeric)
             base_cats - all possible categories of the parent feature (if parent feature is categorical)
+
     """
     if model_data is None:
         return pd.DataFrame.from_dict(
-            {'count': 0, 'low_count': 0, 'low_perc': 0, 'high_perc': 0, 'perc_of_total': 0,
+            {'count': 0, 'worse_count': 0, 'worse_perc': 0, 'better_perc': 0, 'perc_of_total': 0,
              'target_delta': 0, 'target_delta_by_volume': 0,
              'base_col': '', 'base_breaks': list(), 'base_range': list(), 'base_cats': list(),
              'target_mean': 0, 'target_median': 0},
@@ -58,10 +64,10 @@ def calculate_dependence(model_data: 'BinaryDependenceModelData' = None) -> pd.D
         df_features.sum(axis=0), columns=['count']).sort_values(by='count', ascending=False)
 
     df_low = df_features[df_features[model_data.y_binary_name] == 1].drop(model_data.y_binary_name, axis=1).copy()
-    res_low = pd.DataFrame(df_low.sum(axis=0), columns=['low_count'])
+    res_low = pd.DataFrame(df_low.sum(axis=0), columns=['worse_count'])
     res_low = pd.merge(res_total, res_low, left_index=True, right_index=True)
-    res_low['low_perc'] = (res_low['low_count'] / res_low['count']) * 100
-    res_low['high_perc'] = 100 - res_low['low_perc']
+    res_low['worse_perc'] = (res_low['worse_count'] / res_low['count']) * 100
+    res_low['better_perc'] = 100 - res_low['worse_perc']
     res_low['perc_of_total'] = (res_low['count'] / model_data.data.shape[0]) * 100
     res_low['target_delta'] = np.nan
     res_low['target_delta_by_volume'] = np.nan
@@ -101,7 +107,11 @@ def calculate_dependence(model_data: 'BinaryDependenceModelData' = None) -> pd.D
         else:
             raise ValueError("Segment name not found in links")
 
-    res_low = res_low.sort_values(by='target_delta_by_volume', ascending=model_data.inverse_goal)
+    sort_ascending = model_data.inverse_goal
+    if not sort_from_best_to_worst:
+        sort_ascending = not sort_ascending
+
+    res_low = res_low.sort_values(by='target_delta_by_volume', ascending=sort_ascending)
 
     return res_low
 

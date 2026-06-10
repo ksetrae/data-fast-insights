@@ -1,3 +1,7 @@
+### 0.4.4
+* Rename resulting df columns
+* Introduce sort argument for calculating results 
+
 ### 0.4.3.
 * Allow inversed goals (experimental)
 

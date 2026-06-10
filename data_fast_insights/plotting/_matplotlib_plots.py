@@ -99,7 +99,7 @@ def plot_segments_dependence(model_data: 'BinaryDependenceModelData',
     if any(o < 0 for o in series) and any(o > 0 for o in series):
         ax.axhline(y=0.0, color='black', linestyle='-')
 
-    if param_name == 'high_perc':
+    if param_name == 'better_perc':
         _ = series.plot(ax=ax, kind='bar', legend=True, color='c')
     else:
         _ = series.plot(ax=ax, kind='bar', legend=True)
@@ -274,7 +274,7 @@ def plot_segments_basic_info(model_data: 'BinaryDependenceModelData',
     plot_segments_dependence(model_data=model_data,
                              res_low_df=res_low_df,
                              base_feature_name=base_feature_name,
-                             param_name='high_perc',
+                             param_name='better_perc',
                              unit_name=unit_name,
                              resort=resort,
                              ax=axs[1],

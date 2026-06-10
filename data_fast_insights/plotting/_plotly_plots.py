@@ -16,7 +16,7 @@ def create_feature_segments_plot_plotly(
     ----------
     info_df : pd.DataFrame
         DataFrame with an index containing 'feature_segment' strings,
-        and columns ['base_col', 'target_mean', 'perc_of_total', 'count', 'high_perc'].
+        and columns ['base_col', 'target_mean', 'perc_of_total', 'count', 'better_perc'].
     segment_order : Iterable
         The pre-defined explicit order of segment names to arrange the data rows by.
     target_name : str, optional
@@ -103,7 +103,7 @@ def create_feature_segments_plot_plotly(
             row=2, col=1, secondary_y=True
         )
 
-        high_perc_val = feature_df['high_perc'] if 'high_perc' in feature_df else [0] * len(clean_xticks)
+        high_perc_val = feature_df['better_perc'] if 'better_perc' in feature_df else [0] * len(clean_xticks)
         fig.add_trace(
             go.Scatter(
                 x=clean_xticks, y=high_perc_val,

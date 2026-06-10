@@ -31,6 +31,7 @@ class BinaryDependenceModelData:
         Attributes description is to be done.
     """
 
+    # TODO: use them dynamically as well
     RESERVED_SUBSTRINGS = {'_AND_', '_IN_', '_NOT_IN_', '<=', '>'}
 
     # TODO: attributes description, since they are useful
