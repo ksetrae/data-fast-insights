@@ -101,8 +101,8 @@ def calculate_dependence(model_data: 'BinaryDependenceModelData' = None) -> pd.D
                 res_low.at[i, 'base_breaks'] = model_data.bins[base_col]['breaks'].tolist()
             elif base_col in model_data.cat_cols:
                 res_low.at[i, 'base_cats'] = model_data.base_data[base_col].unique()
-    res_low = res_low.sort_values(by='low_perc', ascending=False)
 
+    res_low = res_low.sort_values(by='low_perc', ascending=False)
     # reorder so that interval order is correct
     res_low = res_low.reindex(list(model_data.col_links.keys()))
 
