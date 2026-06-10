@@ -451,18 +451,21 @@ class BinaryDependenceModelData:
                     else:
                         raise ValueError("Unknown condition")
             if segment['cat_include']:
-                cat_feat_name, allowed_cats = segment['cat_include']
-                segment_raw_data = segment_raw_data[segment_raw_data[cat_feat_name].isin(allowed_cats)]
+                for cat_feat in segment['cat_include']:
+                    cat_feat_name, allowed_cats = cat_feat
+                    segment_raw_data = segment_raw_data[segment_raw_data[cat_feat_name].isin(allowed_cats)]
+
             if segment['cat_exclude']:
-                cat_feat_name, forbidden_cats = segment['cat_exclude']
-                segment_raw_data = segment_raw_data[~segment_raw_data[cat_feat_name].isin(forbidden_cats)]
+                for cat_feat in segment['cat_exclude']:
+                    cat_feat_name, forbidden_cats = cat_feat
+                    segment_raw_data = segment_raw_data[~segment_raw_data[cat_feat_name].isin(forbidden_cats)]
 
             segment_name = compile_splits_to_string_interval(segment)
 
             self.data[segment_name] = self.base_data.index.isin(segment_raw_data.index)
 
             # Same column name for all of these segments for now, don't have an idea how to split them yet
-            self.col_links[segment_name] = 'from_decision_tree_custom'
+            self.col_links[segment_name] = '<from_decision_tree_custom>'
             self.segment_sources[segment_name] = SegmentSource.DECISION_TREE_BINNING
 
     def remove_segment_combinations(self):
