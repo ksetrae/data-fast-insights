@@ -363,9 +363,9 @@ class BinaryDependenceModelData:
 
         _comb_max_size = int(comb_max_size)
         if _comb_max_size < 2:
-            print("comb_max_size < 2, no features will be created")
+            logging.info("comb_max_size < 2, no features will be created")
             return
-        elif _comb_max_size > 3:
+        elif _comb_max_size > 2:
             logging.warning(f'Using high comb_max_size ({comb_max_size}), calculations might take some time.')
 
         unwanted = {self.y_name, self.y_binary_name}
@@ -382,6 +382,7 @@ class BinaryDependenceModelData:
 
             binary_features.add(c)
 
+        new_segments = {}
         for comb_curr_size in range(2, _comb_max_size + 1):
             logger.info(f'Working on combinations of level {comb_curr_size} of {_comb_max_size}')
             binary_combs = combinations(binary_features, comb_curr_size)
@@ -397,7 +398,7 @@ class BinaryDependenceModelData:
                     continue
 
                 binary_name = '_AND_'.join(comb)
-                self.data[binary_name] = np.logical_and.reduce([self.data[col] for col in comb]).astype(int)
+                new_segments[binary_name] = np.logical_and.reduce([self.data[col] for col in comb]).astype(int)
 
                 # self.col_links[binary_name] = json.dumps(sorted(comb))
 
@@ -412,6 +413,11 @@ class BinaryDependenceModelData:
                 # sorted so that parts from same 2 base columns always get a same combination
                 self.col_links[binary_name] = str(sorted(base_cols))
                 self.segment_sources[binary_name] = SegmentSource.COMBINATION_ON_EXISTING
+
+        # faster than inserting new column often (fragmented dataframe)
+        new_df = pd.DataFrame(new_segments)
+        new_df.index = self.data.index
+        self.data = self.data.join(new_df)
 
     def add_combinations_from_decision_tree(
             self,
