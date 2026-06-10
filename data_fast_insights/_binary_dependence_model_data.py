@@ -317,7 +317,7 @@ class BinaryDependenceModelData:
         if _comb_max_size < 2:
             print("comb_max_size < 2, no features will be created")
             return
-        elif _comb_max_size > 5:
+        elif _comb_max_size > 3:
             logging.warning(f'Using high comb_max_size ({comb_max_size}), calculations might take some time.')
 
         unwanted = {self.y_name, self.y_binary_name}
@@ -331,4 +331,15 @@ class BinaryDependenceModelData:
                 binary_name = '_AND_'.join(comb)
                 self.data[binary_name] = np.logical_and.reduce([self.data[col] for col in comb]).astype(int)
 
-                self.col_links[binary_name] = json.dumps(sorted(comb))
+                # self.col_links[binary_name] = json.dumps(sorted(comb))
+
+                # getting segments' base_columns to construct a base_column for a combination
+                base_cols = []
+                for segment in comb:
+                    if segment in self.col_links:
+                        base_cols.append(self.col_links[segment])
+                    else:
+                        raise ValueError("Segment name not found in links")
+
+                # sorted so that parts from same 2 base columns always get a same combination
+                self.col_links[binary_name] = str(sorted(base_cols))

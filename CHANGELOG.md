@@ -1,4 +1,8 @@
 
+### 0.4.1
+* Rework base_cols of combined segments for better visual representation
+* Now sorting output dataframe by group_importance instead
+
 ### 0.4
 * Switch to interactive plotly plotting
 * Misc refactoring and improvements
