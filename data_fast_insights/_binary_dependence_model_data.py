@@ -3,13 +3,13 @@ from typing import Iterable, Optional
 from itertools import combinations
 import logging
 from collections import OrderedDict
-import json
 import enum
 
 import numpy as np
 import pandas as pd
 
 from ._decision_tree_multidim_binning import get_optimized_combination_splits, compile_splits_to_string_interval
+from .resources.const_names import ENTIRE_DATASET_SEGMENT_NAME
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -32,7 +32,7 @@ class BinaryDependenceModelData:
     """
 
     # TODO: use them dynamically as well
-    RESERVED_SUBSTRINGS = {'_AND_', '_IN_', '_NOT_IN_', '<=', '>'}
+    RESERVED_SUBSTRINGS = {'_AND_', '_IN_', '_NOT_IN_', '<=', '>', ENTIRE_DATASET_SEGMENT_NAME}
 
     # TODO: attributes description, since they are useful
     def __init__(self,
@@ -252,6 +252,12 @@ class BinaryDependenceModelData:
                 self.segment_sources[binary_name] = SegmentSource.PRIMARY_BINNING
         # self.data = self.data.drop(self.num_cols, 1)
 
+    def _make_segment_for_entire_dataset(self) -> None:
+        binary_name = ENTIRE_DATASET_SEGMENT_NAME
+        self.data[binary_name] = 1
+        self.col_links[binary_name] = ENTIRE_DATASET_SEGMENT_NAME
+        self.segment_sources[binary_name] = SegmentSource.PRIMARY_BINNING
+
     def convert_to_binary(self,
                           bins: Optional[dict] = None) -> None:
         """ Convert all variables to binary format.
@@ -272,6 +278,7 @@ class BinaryDependenceModelData:
         self.bins = dict() if bins is None else bins
         self._convert_cats()
         self._convert_nums(self.bins)
+        self._make_segment_for_entire_dataset()
         self.is_data_converted = True
 
     def construct_partial_combs(self, selected_feature, consider_selected_base: bool = True):

@@ -3,6 +3,9 @@ from plotly.subplots import make_subplots
 import pandas as pd
 from typing import Iterable, Optional
 
+# Import the system runtime variable matching your repository structure
+from data_fast_insights.resources.const_names import ENTIRE_DATASET_SEGMENT_NAME
+
 
 def create_feature_segments_plot_plotly(
         info_df: pd.DataFrame,
@@ -11,6 +14,7 @@ def create_feature_segments_plot_plotly(
 ) -> go.Figure:
     """
     Generates an interactive vertically stacked subplot dashboard using Plotly.
+    Includes global dataset baseline indicators with fixed right-side clipping padding.
 
     Parameters
     ----------
@@ -22,7 +26,15 @@ def create_feature_segments_plot_plotly(
     target_name : str, optional
         The name of the target variable to display in quotes across axis labels.
     """
-    # 1. Create a safe copy of the input dataframe and reindex it explicitly
+    # 1. Extract the global aggregates from the master dataframe before reindexing drops them
+    global_mean = None
+    global_better_perc = None
+
+    if ENTIRE_DATASET_SEGMENT_NAME in info_df.index:
+        global_mean = float(info_df.loc[ENTIRE_DATASET_SEGMENT_NAME, 'target_mean'])
+        global_better_perc = float(info_df.loc[ENTIRE_DATASET_SEGMENT_NAME, 'better_perc'])
+
+    # 2. Create a safe copy of the input dataframe and reindex it explicitly
     res_low = info_df.copy()
     res_low = res_low.reindex(list(segment_order))
 
@@ -130,11 +142,49 @@ def create_feature_segments_plot_plotly(
         for i in range(traces_per_feature):
             fig.data[i].visible = True
 
+    # 3. Construct layout lines using explicit paper coordinates bounds to prevent text clutter
+    shapes = []
+    annotations = []
+
+    # Global Mean Line (Top Plot - Row 1)
+    if global_mean is not None:
+        shapes.append(dict(
+            type="line", xref="paper", yref="y",
+            x0=0, x1=0.96, y0=global_mean, y1=global_mean,  # Left buffer clearance at 0.96
+            line=dict(color="#2b5c8f", width=1.5, dash="dash")
+        ))
+        annotations.append(dict(
+            xref="paper", yref="y", x=1.001, y=global_mean,
+            text=f"Total Mean: {global_mean:.4f}",
+            showarrow=False, xanchor="left", yanchor="middle",
+            font=dict(color="#2b5c8f", size=10)
+        ))
+
+    # Global Better Percentage Line (Bottom Plot - Row 2)
+    if global_better_perc is not None:
+        shapes.append(dict(
+            type="line", xref="paper", yref="y3",
+            x0=0, x1=0.96, y0=global_better_perc, y1=global_better_perc,
+            line=dict(color="#e67e22", width=1.5, dash="dash")
+        ))
+        annotations.append(dict(
+            xref="paper", yref="y3", x=1.001, y=global_better_perc,
+            text=f"Total % Better: {global_better_perc:.1f}%",
+            showarrow=False, xanchor="left", yanchor="middle",
+            font=dict(color="#e67e22", size=10)
+        ))
+
     fig.update_layout(
         template="plotly_white",
         hovermode="x unified",
         height=750,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+
+        # FIX: Expand right margin padding to prevent right axis text truncation
+        margin=dict(r=130, l=60, t=100, b=60),
+
+        shapes=shapes,
+        annotations=list(fig.layout.annotations) + annotations,
 
         # Row 1 Subplot Axes Design
         yaxis=dict(
