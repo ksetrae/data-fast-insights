@@ -329,7 +329,10 @@ class BinaryDependenceModelData:
                 self.col_links[binary_name] = sel if consider_selected_base else other
                 self.segment_sources[binary_name] = SegmentSource.PARTIAL_COMBINATION
 
-    def add_combinations_from_existing_segments(self, comb_max_size: int, progress_frequency: int = 100) -> None:
+    def add_combinations_from_existing_segments(self,
+                                                comb_max_size: int,
+                                                exclude_base_cols: set | None = None,
+                                                progress_frequency: int = 1000) -> None:
         """ Binary feature combinations of sizes up to comb_max_size are constructed as binary features.
                 These features equal 1 when all of its members equal 1.
 
@@ -377,6 +380,10 @@ class BinaryDependenceModelData:
 
             # skip combination segments that were created by other methods or this one earlier calls
             if self.segment_sources[c] != SegmentSource.PRIMARY_BINNING:
+                continue
+
+            if exclude_base_cols is not None and self.col_links[c] in exclude_base_cols:
+                # logger.info(f'excluded segment {c} from combinations')
                 continue
 
             binary_features.add(c)
