@@ -1,4 +1,5 @@
 from typing import TYPE_CHECKING
+import sys
 
 import numpy as np
 import pandas as pd
@@ -14,7 +15,7 @@ if TYPE_CHECKING:
 def calculate_dependence(
         model_data: 'BinaryDependenceModelData' = None,
         sort_from_best_to_worst: bool = True,
-
+        progress_frequency: int = 100,
 ) -> pd.DataFrame:
     """ Calculate dependence on target for features in model_data
 
@@ -89,6 +90,10 @@ def calculate_dependence(
 
     target_series = model_data.data[model_data.y_name]
     total_mean = target_series.mean()
+
+    progress_index = 0
+    total = res_low.shape[0]
+
     for i, row in res_low.iterrows():
         segment_target = target_series[model_data.data[i] == 1]
         segment_target_delta = ((segment_target.mean() / total_mean) - 1) * 100.0
@@ -108,6 +113,16 @@ def calculate_dependence(
                 res_low.at[i, 'base_cats'] = model_data.base_data[base_col].unique()
         else:
             raise ValueError("Segment name not found in links")
+
+        if progress_index % progress_frequency == 0:
+            # display progress
+            progress = (progress_index + 1) / total
+            percent = int(progress * 100)
+            bar_length = 20
+            filled_length = int(bar_length * progress)
+            bar = '█' * filled_length + '-' * (bar_length - filled_length)
+            sys.stdout.write(f"\rProgress: [{bar}] {percent}% Complete")
+            sys.stdout.flush()
 
     sort_ascending = model_data.inverse_goal
     if not sort_from_best_to_worst:
