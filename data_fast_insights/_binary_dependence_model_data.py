@@ -364,6 +364,14 @@ class BinaryDependenceModelData:
 
             for comb in binary_combs:
 
+                # if at least 2 of base segments have the same base column, it will make up an impossible segment
+                # (non-overlapping intervals)
+                base_columns = []
+                for binary_name in comb:
+                    base_columns.append(self.col_links[binary_name])
+                if len(set(base_columns)) != len(base_columns):
+                    continue
+
                 binary_name = '_AND_'.join(comb)
                 self.data[binary_name] = np.logical_and.reduce([self.data[col] for col in comb]).astype(int)
 
