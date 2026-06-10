@@ -1,4 +1,14 @@
-matplotlib>=3.2.1
-numpy>=1.18.2
-pandas>=1.0.3
-scorecardpy>=0.1.9.1.1
+# matplotlib>=3.2.1
+# numpy>=1.18.2
+# pandas>=1.0.3
+# scorecardpy>=0.1.9.1.1
+
+# lower versions might work but weren't tested (as well as higher than mentioned)
+matplotlib>=3.10.9
+numpy>=2.4.6
+pandas>=3.0.3
+optbinning>=0.20.0
+plotly==6.8.0
+
+# for examples
+scikit-learn>=1.9.0

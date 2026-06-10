@@ -84,7 +84,7 @@ class SplitApplyCombineModelData(BinaryDependenceModelData):
             lambda x, y: x + y,
             [r['res'].drop(
                 ['base_col', 'base_breaks', 'base_range', 'base_cats'],
-                0) for r in self.exp_data_reports.values()])
+                axis=0) for r in self.exp_data_reports.values()])
 
         for f in total_res.columns:
             """Since we have added zeros for features that are missing,

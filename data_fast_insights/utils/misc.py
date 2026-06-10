@@ -41,8 +41,14 @@ def change_interval_name_for_plot(is_numeric: bool, interval_string: str, unit_n
     if interval_string.endswith('missing'):
         return 'unknown'
     elif interval_string.count(',') == 1:
+
+        if interval_string.count('[') != 1 or interval_string.count(')') != 1:
+            raise ValueError("Invalid interval string")
+        if not interval_string.startswith('[') and interval_string.endswith(')'):
+            raise ValueError("Invalid interval string")
+
         s0, s1 = interval_string.strip('[]()').split(',')
-        return f'from {s0}{unit_name_} up to {s1} {unit_name_}'
+        return f'from {s0}{unit_name_} up to{s1} {unit_name_}'
     else:
         logging.warning(f'Cannot process interval string: {interval_string}')
     return interval_string

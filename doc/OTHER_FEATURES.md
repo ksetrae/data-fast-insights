@@ -117,7 +117,6 @@ This document describes additional features which are not described in the root 
       
         from data_fast_insights.experimental import SplitApplyCombineModelData
         import data_fast_insights.calculations as calc
-        from data_fast_insights.plotting import plot_segments_basic_info
         ```
       
         In the following lines we're setting data as in the usual Data Fast Insights experiment.
@@ -167,7 +166,7 @@ This document describes additional features which are not described in the root 
         (in this case, absolute size).  
         _This filtering is separate, because it's only available after local experiments_.
         ```python
-        sac_base.filter_transpose_results({'total_sum': 200})
+        sac_base.filter_transpose_results({'count': 200})
         ```
         Fill default values for features that are missing in some groups.
         ```python
@@ -183,13 +182,7 @@ This document describes additional features which are not described in the root 
         
         total_res_cut = sac_base.total_res.copy()
         
-        total_res_cut = total_res_cut[total_res_cut['total_sum'] > 400]
+        total_res_cut = total_res_cut[total_res_cut['count'] > 400]
         total_res_cut = total_res_cut[total_res_cut['perc_of_total'] > 10]
         total_res_cut = total_res_cut[total_res_cut['number_of_experiments'] >= 5]
-        ```
-        
-        Plots are used in the same manner as for the usual experiment
-        ```python
-        f = plot_segments_basic_info(sac_base, sac_base.total_res, 'price_usd_current_min', 
-                                     base_feature_rename='Minimum Price of the Item, USD')
         ```

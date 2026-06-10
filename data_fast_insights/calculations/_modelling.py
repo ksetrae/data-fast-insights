@@ -2,6 +2,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
+from matplotlib.lines import segment_hits
 
 from data_fast_insights import utils
 
@@ -10,94 +11,110 @@ if TYPE_CHECKING:
     from data_fast_insights import BinaryDependenceModelData
 
 
-def calculate_dependence(model_data: 'BinaryDependenceModelData' = None) -> pd.DataFrame:
+def calculate_dependence(
+        model_data: 'BinaryDependenceModelData' = None,
+        sort_from_best_to_worst: bool = True,
+
+) -> pd.DataFrame:
     """ Calculate dependence on target for features in model_data
 
     Parameters
     ----------
     model_data
         If not set, return a dataframe with a row of default values
+    sort_from_best_to_worst
 
     Returns
     -------
     pd.DataFrame
         DataFrame with data about dependence between features and target
         Columns description:
-            total_sum - sum of the binary feature values (size of the segment, absolute)
-            low_sum - sum of the binary feature values where binary target equals 1
+            count - sum of the binary feature values (size of the segment, absolute)
+            worse_count - sum of the binary feature values where binary target equals 1
                 (how much segment entries are lower than the selected
                 target threshold (e.g. median or mean))
-            low_perc - (low_sum / total_sum) * 100 (how bad the segment is, in percent).
+            worse_perc - (worse_count / count) * 100 (how bad the segment is, in percent).
                 It represents the share of objects (rows) that are lower than the selected
                 target threshold (e.g. median or mean) of all segment objects.
-            high_perc - (100 - low_perc).
+            better_perc - (100 - worse_perc).
             perc_of_total - segment share of total data, in percent (size of the segment, relative).
                 Total "perc_of_total" of all segments across one base (original) feature equals 1.
-            target_delta_perc - how much target mean of this segment differs from total target mean, in percent
-            group_importance - relative segment size multiplied by difference of segment target from total target.
-                More precisely:
-                    (count_segment_objects/count_total_objects) * abs(avg(segment_target) - avg(total_target))
+            target_delta - how much target mean of this segment differs from total target mean, in percent
+            target_delta_by_volume - (target_delta * perc_of_total) / 100
+                Used to estimate total effect of the segment with consideration how large it is.
+                Small segments can differ significantly, but be insignificant itself
             base_col - parent feature for segment.
                 If the binary feature is a combination of multiple binary features,
                 it contains json array of parent binary features
             base_breaks - chosen breaks of intervals of the parent feature (if parent feature is numeric)
             base_range - min and max values of the parent feature (if parent feature is numeric)
             base_cats - all possible categories of the parent feature (if parent feature is categorical)
+
     """
     if model_data is None:
         return pd.DataFrame.from_dict(
-            {'total_sum': 0, 'low_sum': 0, 'low_perc': 0, 'high_perc': 0, 'perc_of_total': 0,
-             'target_delta_perc': 0, 'group_importance': 0,
-             'base_col': '', 'base_breaks': list(), 'base_range': list(), 'base_cats': list()},
+            {'count': 0, 'worse_count': 0, 'worse_perc': 0, 'better_perc': 0, 'perc_of_total': 0,
+             'target_delta': 0, 'target_delta_by_volume': 0,
+             'base_col': '', 'base_breaks': list(), 'base_range': list(), 'base_cats': list(),
+             'target_mean': 0, 'target_median': 0},
             orient='index')
 
-    # if not model_data.is_data_converted:
-    #     warnings.warn("""Features in model_data seem to not be converted to binary format yet,
-    #     calculate_dependence() might return wrong output.
-    #     """)
-    df_features = model_data.data.drop(model_data.y_name, 1)
+    df_features = model_data.data.drop(model_data.y_name, axis=1)
     res_total = pd.DataFrame(
-        df_features.sum(axis=0), columns=['total_sum']).sort_values(by='total_sum', ascending=False)
+        df_features.sum(axis=0), columns=['count']).sort_values(by='count', ascending=False)
 
-    df_low = df_features[df_features[model_data.y_binary_name] == 1].drop(model_data.y_binary_name, 1).copy()
-    res_low = pd.DataFrame(df_low.sum(axis=0), columns=['low_sum'])
+    df_low = df_features[df_features[model_data.y_binary_name] == 1].drop(model_data.y_binary_name, axis=1).copy()
+    res_low = pd.DataFrame(df_low.sum(axis=0), columns=['worse_count'])
     res_low = pd.merge(res_total, res_low, left_index=True, right_index=True)
-    res_low['low_perc'] = (res_low['low_sum'] / res_low['total_sum']) * 100
-    res_low['high_perc'] = 100 - res_low['low_perc']
-    res_low['perc_of_total'] = (res_low['total_sum'] / model_data.data.shape[0]) * 100
-    res_low['target_delta_perc'] = np.nan
-    res_low['group_importance'] = np.nan
+    res_low['worse_perc'] = (res_low['worse_count'] / res_low['count']) * 100
+    res_low['better_perc'] = 100 - res_low['worse_perc']
+    res_low['perc_of_total'] = (res_low['count'] / model_data.data.shape[0]) * 100
+    res_low['target_delta'] = np.nan
+    res_low['target_delta_by_volume'] = np.nan
 
     res_low['base_col'] = ''
     res_low['base_breaks'] = ''
+    res_low['base_breaks'] = res_low['base_breaks'].astype(object)
     res_low['base_range'] = ''
     # res_low['base_central_value'] = np.nan
     # res_low['base_central_value'] = res_low['base_central_value'].astype(object)
     # res_low['base_min'] = np.nan
     # res_low['base_max'] = np.nan
     res_low['base_cats'] = ''
+    res_low['base_cats'] = res_low['base_cats'].astype(object)
+    res_low['target_mean'] = np.nan
+    res_low['target_median'] = np.nan
 
     # TODO: change from .iterrows() to faster type of iterations (e.g. zip() on series?)
+
+    target_series = model_data.data[model_data.y_name]
+    total_mean = target_series.mean()
     for i, row in res_low.iterrows():
-        res_low.at[i, 'target_delta_perc'] = ((model_data.data[model_data.data[i] == 1][model_data.y_name].mean() /
-                                              model_data.data[model_data.y_name].mean()) - 1) * 100
-        res_low.at[i, 'group_importance'] = \
-            (model_data.data[model_data.data[i] == 1].shape[0] / model_data.data.shape[0]) * \
-            abs(model_data.data[model_data.data[i] == 1][model_data.y_name].mean() -
-                model_data.data[model_data.y_name].mean())
+        segment_target = target_series[model_data.data[i] == 1]
+        segment_target_delta = ((segment_target.mean() / total_mean) - 1) * 100.0
+        res_low.at[i, 'target_delta'] = segment_target_delta
+        res_low.at[i, 'target_mean'] = segment_target.mean()
+        res_low.at[i, 'target_median'] = segment_target.median()
+        res_low.at[i, 'target_delta_by_volume'] = (segment_target_delta * res_low.at[i, 'perc_of_total']) / 100.0
 
         if i in model_data.col_links:
             base_col = model_data.col_links[i]
             res_low.at[i, 'base_col'] = base_col
-            # res_low.at[i, 'base_central_value'] = model_data.base_data[base_col].__getattribute__(
-            #     utils.choose_central_tendency_metric(base_col, model_data))()
             if base_col in model_data.num_cols:
                 res_low.at[i, 'base_range'] = str([model_data.base_data[base_col].min(),
                                                    model_data.base_data[base_col].max()])
                 res_low.at[i, 'base_breaks'] = model_data.bins[base_col]['breaks'].tolist()
             elif base_col in model_data.cat_cols:
                 res_low.at[i, 'base_cats'] = model_data.base_data[base_col].unique()
-    res_low = res_low.sort_values(by='low_perc', ascending=False)
+        else:
+            raise ValueError("Segment name not found in links")
+
+    sort_ascending = model_data.inverse_goal
+    if not sort_from_best_to_worst:
+        sort_ascending = not sort_ascending
+
+    res_low = res_low.sort_values(by='target_delta_by_volume', ascending=sort_ascending)
+
     return res_low
 
 def compare_intervals(selected: str, model_data: 'BinaryDependenceModelData') -> pd.DataFrame:
