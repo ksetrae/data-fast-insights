@@ -1,3 +1,7 @@
+### 0.4.5
+* Significantly speed up calculating dependence
+* Fix <ENTIER_DATASET> segment appearing in combinations
+
 ### 0.4.4
 * Rename resulting df columns
 * Introduce sort argument for calculating results 

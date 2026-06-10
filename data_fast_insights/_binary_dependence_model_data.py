@@ -20,6 +20,7 @@ class SegmentSource(enum.Enum):
     PARTIAL_COMBINATION = 2
     COMBINATION_ON_EXISTING = 3
     DECISION_TREE_BINNING = 4
+    ENTIRE_DATASET = 5
 
 
 class BinaryDependenceModelData:
@@ -256,7 +257,7 @@ class BinaryDependenceModelData:
         binary_name = ENTIRE_DATASET_SEGMENT_NAME
         self.data[binary_name] = 1
         self.col_links[binary_name] = ENTIRE_DATASET_SEGMENT_NAME
-        self.segment_sources[binary_name] = SegmentSource.PRIMARY_BINNING
+        self.segment_sources[binary_name] = SegmentSource.ENTIRE_DATASET
 
     def convert_to_binary(self,
                           bins: Optional[dict] = None) -> None:

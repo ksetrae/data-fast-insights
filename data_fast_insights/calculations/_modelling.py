@@ -86,9 +86,11 @@ def calculate_dependence(
     res_low['target_median'] = np.nan
 
     # TODO: change from .iterrows() to faster type of iterations (e.g. zip() on series?)
-    total_mean = model_data.data[model_data.y_name].mean()
+
+    target_series = model_data.data[model_data.y_name]
+    total_mean = target_series.mean()
     for i, row in res_low.iterrows():
-        segment_target = model_data.data[model_data.data[i] == 1][model_data.y_name]
+        segment_target = target_series[model_data.data[i] == 1]
         segment_target_delta = ((segment_target.mean() / total_mean) - 1) * 100.0
         res_low.at[i, 'target_delta'] = segment_target_delta
         res_low.at[i, 'target_mean'] = segment_target.mean()
