@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 def calculate_dependence(
         model_data: 'BinaryDependenceModelData' = None,
         sort_from_best_to_worst: bool = True,
-        progress_frequency: int = 100,
+        progress_frequency: int = 1000,
 ) -> pd.DataFrame:
     """ Calculate dependence on target for features in model_data
 
