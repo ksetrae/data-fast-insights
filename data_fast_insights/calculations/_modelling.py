@@ -124,6 +124,8 @@ def calculate_dependence(
             sys.stdout.write(f"\rProgress: [{bar}] {percent}% Complete")
             sys.stdout.flush()
 
+        progress_index += 1
+
     sort_ascending = model_data.inverse_goal
     if not sort_from_best_to_worst:
         sort_ascending = not sort_ascending
